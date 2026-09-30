@@ -1,0 +1,3 @@
+add_executable(magda_sdk_smoke_test smoke_test.cpp)
+target_link_libraries(magda_sdk_smoke_test PRIVATE magda::sdk_core)
+add_test(NAME magda_sdk_smoke COMMAND magda_sdk_smoke_test)

@@ -1,0 +1,22 @@
+# magda-sdk
+
+Host-independent core of the MAGDA SDK. `core/` holds code that builds natively and to
+WebAssembly with no JUCE, DOM or Edit dependency; `hosts/` holds the adapters that may
+use them. A configure-time check (`cmake/BoundaryCheck.cmake`) fails on a forbidden
+include outside `hosts/`.
+
+## Build
+
+    cmake -S . -B build
+    cmake --build build
+    ctest --test-dir build --output-on-failure
+
+Wasm (Emscripten, SIMD, no pthreads):
+
+    emcmake cmake -S . -B build-wasm -DCMAKE_CXX_FLAGS=-msimd128
+    cmake --build build-wasm
+
+Consume from a parent project with `add_subdirectory` and link `magda::sdk_core`.
+Tests are built only when this is the top-level project.
+
+Licensed under GPL-3.0.
