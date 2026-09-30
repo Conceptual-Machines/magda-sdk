@@ -23,5 +23,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: mymindstorm/setup-emsdk@v14
-      - run: emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-msimd128 -DMAGDA_SDK_BUILD_TESTS=OFF
+      - run: emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release -DMAGDA_SDK_BUILD_TESTS=OFF
       - run: cmake --build build-wasm

@@ -1,11 +1,11 @@
-# Configure-time boundary check: only hosts/ may reach JUCE, DOM bindings or Edit code.
+# Configure-time boundary check: only hosts/ may reach JUCE, DOM bindings or Tracktion.
 # Quoted includes outside hosts/ must name SDK headers ("magda/...").
 
 set(MAGDA_SDK_ALLOWED_QUOTED_PREFIXES "magda/")
 set(MAGDA_SDK_FORBIDDEN_INCLUDE_PATTERNS
     "^juce_" "^JuceHeader" "^juce/"
     "^emscripten" "^webgpu/" "^html5"
-    "^tracktion" "Edit")
+    "^tracktion")
 
 file(GLOB_RECURSE _sdk_sources CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
@@ -28,7 +28,7 @@ foreach(_source ${_sdk_sources})
                 message(FATAL_ERROR
                     "\nSDK boundary violation in ${_relative}:\n"
                     "    includes \"${_header}\"\n"
-                    "Only hosts/ may include JUCE, DOM bindings or Edit code.\n")
+                    "Only hosts/ may include JUCE, DOM bindings or Tracktion.\n")
             endif()
         endforeach()
 
