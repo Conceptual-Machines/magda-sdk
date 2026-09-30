@@ -19,4 +19,4 @@ Wasm (Emscripten, SIMD, no pthreads):
 Consume from a parent project with `add_subdirectory` and link `magda::sdk_core`.
 Tests are built only when this is the top-level project.
 
-Licensed under GPL-3.0.
+Licensed under MIT.
