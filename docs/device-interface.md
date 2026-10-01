@@ -8,7 +8,7 @@ and nothing in `process()` allocates.
 
 | Call | Thread |
 |---|---|
-| `setHost`, `properties`, `prepare`, `release`, `reset`, `latencySamples`, `tailSamples`, `parameterCount`, `offersParameter`, `parameterValue`, `restoreState`, `telemetry` | control |
+| `setHost`, `properties`, `prepare`, `release`, `reset`, `latencySamples`, `tailSamples`, `parameterCount`, `parameterDescriptor`, `offersParameter`, `parameterValue`, `restoreState`, `telemetry` | control |
 | `process`, `setParameterValue`, `setParameterSegments` | audio |
 | every `DeviceHost` call | control |
 
@@ -78,8 +78,8 @@ Parameters are addressed by slot, normalized to [0, 1]. Before each `process()` 
 `setParameterValue(slot, value)` with the block's value, or `setParameterSegments(slot,
 segments)` for a sample-accurate value: linear spans from each segment's start value to its end
 value, ending where the next begins. The default segment form applies the first segment's start
-value through the scalar setter. Descriptions of parameters (names, ranges, units) are the
-manifest's business and are not part of this interface.
+value through the scalar setter. `parameterDescriptor(slot)` returns the slot's static description, a
+`ParameterDescriptor`; the parameter manifest (`docs/parameter-manifest.md`) is built from it.
 
 ## State
 

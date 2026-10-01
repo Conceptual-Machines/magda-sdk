@@ -100,6 +100,13 @@ class Device {
         return true;
     }
 
+    /// Control. How @p slot is described: the source of the parameter manifest. Slots are those
+    /// of parameterCount().
+    virtual ParameterDescriptor parameterDescriptor(int slot) const {
+        (void)slot;
+        return {};
+    }
+
     virtual float parameterValue(int slot) const {
         (void)slot;
         return 0.0f;

@@ -148,6 +148,43 @@ double parseNumberToken(std::string_view token) {
     return toDoubleCLocale(std::string(token));
 }
 
+namespace {
+
+std::string withPoint(std::string text) {
+    const char* point = std::localeconv()->decimal_point;
+    if (point != nullptr && !(point[0] == '.' && point[1] == '\0')) {
+        const auto at = text.find(point);
+        if (at != std::string::npos)
+            text.replace(at, std::char_traits<char>::length(point), ".");
+    }
+    return text;
+}
+
+}  // namespace
+
+std::string writeFloat(float value) {
+    char buffer[64];
+    std::string text;
+
+    // The reader goes through double, so a text must survive that path; widen until it does.
+    for (int precision = 1; precision <= 9; ++precision) {
+        std::snprintf(buffer, sizeof buffer, "%.*g", precision, static_cast<double>(value));
+        text = withPoint(buffer);
+        if (static_cast<float>(toDoubleCLocale(text)) == value)
+            break;
+    }
+
+    // %g turns 1000 into 1e+03; whole numbers read better as themselves.
+    if (text.find('e') != std::string::npos && value == std::floor(value) &&
+        std::abs(value) < 1.0e9f) {
+        std::snprintf(buffer, sizeof buffer, "%.0f", static_cast<double>(value));
+        text = buffer;
+    }
+    if (text.find_first_of(".eE") == std::string::npos)
+        text += ".0";
+    return text;
+}
+
 std::string writeDouble(double value) {
     char buffer[40];
     for (const int precision : {15, 16, 17}) {
