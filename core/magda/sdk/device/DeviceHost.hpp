@@ -18,7 +18,9 @@ class DeviceHost {
      * @brief The device produced state of its own that the host's document does not hold.
      *
      * The host owns the state document and the device restores it; this is the one way state
-     * flows back, for something the host could not have authored.
+     * flows back, for something the host could not have authored. The node is a patch: its
+     * properties are written onto the document root and its children replace the root's
+     * children of the same types.
      */
     virtual void stateChanged(StateNode state) = 0;
 
