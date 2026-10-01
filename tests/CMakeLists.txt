@@ -10,6 +10,7 @@ add_test(NAME magda_sdk_smoke COMMAND magda_sdk_smoke_test)
 
 add_executable(magda_sdk_tests
     test_binary_text.cpp
+    test_device_interface.cpp
     test_state_codec.cpp
     test_state_node.cpp
     test_farbot.cpp
