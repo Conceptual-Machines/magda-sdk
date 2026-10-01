@@ -97,7 +97,16 @@ TEST_CASE("Strings coerce to numbers and bools like juce::String", "[state-node]
     CHECK(withString("60").getInt("k") == 60);
     CHECK(withString("  -12abc").getInt("k") == -12);
     CHECK(withString("1.5").getInt("k") == 1);
-    CHECK(withString("+5").getInt("k") == 0);
+    CHECK(withString("+5").getInt("k") == 5);
+    CHECK(withString("99999999999999999999").getInt64("k") ==
+          std::numeric_limits<std::int64_t>::max());
+    CHECK(withString("-99999999999999999999").getInt64("k") ==
+          std::numeric_limits<std::int64_t>::min());
+    CHECK(withString("9223372036854775807").getInt64("k") ==
+          std::numeric_limits<std::int64_t>::max());
+    CHECK(withString("-9223372036854775808").getInt64("k") ==
+          std::numeric_limits<std::int64_t>::min());
+    CHECK(withString("4294967297").getInt("k") == 1);
     CHECK(withString("abc").getInt("k") == 0);
     CHECK(withString("").getInt("k") == 0);
 
