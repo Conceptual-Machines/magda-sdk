@@ -35,23 +35,32 @@ bool equalsIgnoreCase(std::string_view text, std::string_view lower) {
            });
 }
 
-/// juce::String::getIntValue / getLargeIntValue: leading blanks, an optional '-', then digits
-/// up to the first other char; no '+', and overflow wraps.
-template <typename Int, typename Unsigned>
-Int readInteger(std::string_view text) {
+/// What juce::String::getLargeIntValue reads (atoll): leading blanks, an optional sign, digits
+/// up to the first other char. Saturates at the int64 limits.
+std::int64_t readInteger(std::string_view text) {
     text = skipSpace(text);
-    const bool negative = !text.empty() && text.front() == '-';
-    if (negative)
+    bool negative = false;
+    if (!text.empty() && (text.front() == '-' || text.front() == '+')) {
+        negative = text.front() == '-';
         text.remove_prefix(1);
+    }
 
-    Unsigned value = 0;
+    constexpr auto limit = static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
+    std::uint64_t magnitude = 0;
+    bool saturated = false;
     for (const auto c : text) {
         if (c < '0' || c > '9')
             break;
-        value = static_cast<Unsigned>(value * 10 + static_cast<Unsigned>(c - '0'));
+        const auto digit = static_cast<std::uint64_t>(c - '0');
+        if (!saturated && magnitude > (limit + (negative ? 1u : 0u) - digit) / 10)
+            saturated = true;
+        if (!saturated)
+            magnitude = magnitude * 10 + digit;
     }
 
-    return negative ? static_cast<Int>(Unsigned{0} - value) : static_cast<Int>(value);
+    if (saturated)
+        return negative ? std::numeric_limits<std::int64_t>::min() : std::numeric_limits<std::int64_t>::max();
+    return negative ? static_cast<std::int64_t>(0 - magnitude) : static_cast<std::int64_t>(magnitude);
 }
 
 template <typename Int>
@@ -120,7 +129,7 @@ std::int64_t StateValue::toInt64() const {
         case Kind::Bool:
             return *boolean() ? 1 : 0;
         case Kind::String:
-            return readInteger<std::int64_t, std::uint64_t>(*string());
+            return readInteger(*string());
         case Kind::Binary:
             return 0;
     }
@@ -136,7 +145,7 @@ int StateValue::toInt() const {
         case Kind::Bool:
             return *boolean() ? 1 : 0;
         case Kind::String:
-            return readInteger<std::int32_t, std::uint32_t>(*string());
+            return static_cast<int>(readInteger(*string()));
         case Kind::Binary:
             return 0;
     }
@@ -179,7 +188,7 @@ bool StateValue::toBool() const {
         case Kind::String: {
             const auto& text = *string();
             const auto trimmed = trim(text);
-            return readInteger<std::int32_t, std::uint32_t>(text) != 0 ||
+            return static_cast<int>(readInteger(text)) != 0 ||
                    equalsIgnoreCase(trimmed, "true") || equalsIgnoreCase(trimmed, "yes");
         }
         case Kind::Binary:
