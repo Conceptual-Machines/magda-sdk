@@ -77,10 +77,10 @@ A kind mismatch is never a read failure. The getters coerce exactly as `juce::va
 
 | From \ To | int / int64 | double | bool | string |
 |---|---|---|---|---|
-| int64 | cast (int wraps) | exact | `!= 0` | decimal |
+| int64 | int saturates | exact | `!= 0` | decimal |
 | double | truncate toward zero, saturating | itself | `!= 0` | shortest text that reads back |
 | bool | 0 or 1 | 0.0 or 1.0 | itself | `"1"` or `"0"` |
-| string | leading blanks, optional sign, digits up to the first other char; int64 saturates, int wraps from it (`"60"` 60, `"1.5"` 1, `"+5"` 5, `"abc"` 0) | leading blanks, sign, digits, point, exponent (`"1.5"` 1.5, `"+2"` 2.0, `"abc"` 0.0) | int value `!= 0`, or trimmed `true` / `yes` ignoring case | itself |
+| string | leading blanks, optional sign, digits up to the first other char; both saturate (`"60"` 60, `"1.5"` 1, `"+5"` 5, `"abc"` 0) | leading blanks, sign, digits, point, exponent (`"1.5"` 1.5, `"+2"` 2.0, `"abc"` 0.0) | int value `!= 0`, or trimmed `true` / `yes` ignoring case | itself |
 | binary | 0 | 0.0 | false | the `$bin` text |
 
 - The fallback passed to a getter applies only to an absent key.
