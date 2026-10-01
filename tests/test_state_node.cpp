@@ -110,7 +110,7 @@ TEST_CASE("Strings coerce to numbers and bools like juce::String", "[state-node]
           std::numeric_limits<std::int64_t>::max());
     CHECK(withString("-9223372036854775808").getInt64("k") ==
           std::numeric_limits<std::int64_t>::min());
-    CHECK(withString("4294967297").getInt("k") == 1);
+    CHECK(withString("4294967297").getInt("k") == std::numeric_limits<int>::max());
     CHECK(withString("abc").getInt("k") == 0);
     CHECK(withString("").getInt("k") == 0);
 
