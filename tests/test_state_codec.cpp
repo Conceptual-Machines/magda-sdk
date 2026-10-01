@@ -45,7 +45,8 @@ TEST_CASE("A document round-trips with order, kinds and children intact", "[stat
     CHECK(decoded.document->root.find("gain")->kind() == StateValue::Kind::Double);
     CHECK(decoded.document->root.find("rootNote")->kind() == StateValue::Kind::Int64);
     CHECK(decoded.document->root.find("velocity") == nullptr);
-    CHECK(decoded.document->root.children()[0].find("velocity")->kind() == StateValue::Kind::Double);
+    CHECK(decoded.document->root.children()[0].find("velocity")->kind() ==
+          StateValue::Kind::Double);
 }
 
 TEST_CASE("The writer's text re-encodes byte for byte", "[state-codec]") {
@@ -89,10 +90,13 @@ TEST_CASE("The canonical decoder rejects arrays and other object forms", "[state
     CHECK(statusOf(R"({"schema":2,"device":"x","props":{"a":{"x":1}}})") == DecodeStatus::Invalid);
     CHECK(statusOf(R"({"schema":2,"device":"x","props":{"a":{"$bin":"1...","y":1}}})") ==
           DecodeStatus::Invalid);
-    CHECK(statusOf(R"({"schema":2,"device":"x","props":{"a":{"$bin":5}}})") == DecodeStatus::Invalid);
-    CHECK(statusOf(R"({"schema":2,"device":"x","props":{"a":{"$bin":""}}})") == DecodeStatus::Invalid);
+    CHECK(statusOf(R"({"schema":2,"device":"x","props":{"a":{"$bin":5}}})") ==
+          DecodeStatus::Invalid);
+    CHECK(statusOf(R"({"schema":2,"device":"x","props":{"a":{"$bin":""}}})") ==
+          DecodeStatus::Invalid);
     CHECK(statusOf(R"({"schema":2,"device":"x","props":{"a":null}})") == DecodeStatus::Invalid);
-    CHECK(statusOf(R"({"schema":2,"device":"x","props":{"a":{"$bin":"2.AAA"}}})") == DecodeStatus::Ok);
+    CHECK(statusOf(R"({"schema":2,"device":"x","props":{"a":{"$bin":"2.AAA"}}})") ==
+          DecodeStatus::Ok);
 }
 
 TEST_CASE("The canonical decoder rejects what it would not write", "[state-codec]") {
@@ -177,8 +181,7 @@ TEST_CASE("The writer refuses a document it could not read back", "[state-codec]
 }
 
 TEST_CASE("Strings with escapes and unicode survive", "[state-codec]") {
-    const auto result = decodeDocument(
-        R"({"schema":2,"device":"x","props":{"a":"é😀\n\\\"\/"}})");
+    const auto result = decodeDocument(R"({"schema":2,"device":"x","props":{"a":"é😀\n\\\"\/"}})");
     REQUIRE(result.ok());
     CHECK(result.document->root.getString("a") == "\xC3\xA9\xF0\x9F\x98\x80\n\\\"/");
 

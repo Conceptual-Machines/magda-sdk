@@ -59,12 +59,13 @@ std::int64_t readInteger(std::string_view text) {
     }
 
     if (saturated)
-        return negative ? std::numeric_limits<std::int64_t>::min() : std::numeric_limits<std::int64_t>::max();
-    return negative ? static_cast<std::int64_t>(0 - magnitude) : static_cast<std::int64_t>(magnitude);
+        return negative ? std::numeric_limits<std::int64_t>::min()
+                        : std::numeric_limits<std::int64_t>::max();
+    return negative ? static_cast<std::int64_t>(0 - magnitude)
+                    : static_cast<std::int64_t>(magnitude);
 }
 
-template <typename Int>
-Int saturatingCast(double value) {
+template <typename Int> Int saturatingCast(double value) {
     if (value >= static_cast<double>(std::numeric_limits<Int>::max()))
         return std::numeric_limits<Int>::max();
     if (value <= static_cast<double>(std::numeric_limits<Int>::min()))
@@ -188,8 +189,8 @@ bool StateValue::toBool() const {
         case Kind::String: {
             const auto& text = *string();
             const auto trimmed = trim(text);
-            return static_cast<int>(readInteger(text)) != 0 ||
-                   equalsIgnoreCase(trimmed, "true") || equalsIgnoreCase(trimmed, "yes");
+            return static_cast<int>(readInteger(text)) != 0 || equalsIgnoreCase(trimmed, "true") ||
+                   equalsIgnoreCase(trimmed, "yes");
         }
         case Kind::Binary:
             return false;

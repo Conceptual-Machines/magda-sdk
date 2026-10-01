@@ -55,7 +55,8 @@ struct DecodeResult {
     }
 };
 
-/// Parse the canonical JSON form (docs/device-state.md). Strict: it reads nothing it would not write.
+/// Parse the canonical JSON form (docs/device-state.md). Strict: it reads nothing it would not
+/// write.
 DecodeResult decodeDocument(std::string_view json);
 
 /**

@@ -6,7 +6,8 @@ namespace magda::sdk {
 
 namespace {
 
-constexpr std::string_view kAlphabet = ".ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+";
+constexpr std::string_view kAlphabet =
+    ".ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+";
 
 constexpr std::array<std::int8_t, 256> makeDecodeTable() {
     std::array<std::int8_t, 256> table{};
