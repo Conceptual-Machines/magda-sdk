@@ -1,5 +1,7 @@
 # Configure-time boundary check: only hosts/ may reach JUCE, DOM bindings or Tracktion.
 # Quoted includes outside hosts/ must name SDK headers ("magda/...").
+# Vendored code under core/third_party/ keeps its own include style but is still
+# held to the forbidden patterns.
 
 set(MAGDA_SDK_ALLOWED_QUOTED_PREFIXES "magda/")
 set(MAGDA_SDK_FORBIDDEN_INCLUDE_PATTERNS
@@ -32,7 +34,7 @@ foreach(_source ${_sdk_sources})
             endif()
         endforeach()
 
-        if(_line MATCHES "#[ \t]*include[ \t]*\"")
+        if(NOT _relative MATCHES "^core/third_party/" AND _line MATCHES "#[ \t]*include[ \t]*\"")
             set(_allowed FALSE)
             foreach(_prefix ${MAGDA_SDK_ALLOWED_QUOTED_PREFIXES})
                 if(_header MATCHES "^${_prefix}")
