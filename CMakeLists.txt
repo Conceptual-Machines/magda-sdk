@@ -10,7 +10,13 @@ include(cmake/BoundaryCheck.cmake)
 configure_file(core/magda/sdk/version.hpp.in
     "${CMAKE_CURRENT_BINARY_DIR}/generated/magda/sdk/version_config.hpp" @ONLY)
 
-add_library(magda_sdk_core STATIC core/magda/sdk/version.cpp)
+add_library(magda_sdk_core STATIC
+    core/magda/sdk/version.cpp
+    core/magda/sdk/state/BinaryText.cpp
+    core/magda/sdk/state/StateCodec.cpp
+    core/magda/sdk/state/StateNode.cpp
+    core/magda/sdk/state/detail/Json.cpp
+    core/magda/sdk/state/detail/NumberText.cpp)
 add_library(magda::sdk_core ALIAS magda_sdk_core)
 target_include_directories(magda_sdk_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core>
