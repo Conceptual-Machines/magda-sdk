@@ -16,6 +16,9 @@ double readLenientDouble(std::string_view text);
 /// Convert a token already known to be a JSON number. Locale independent.
 double parseNumberToken(std::string_view token);
 
+/// The shortest text that reads back as @p value through parseNumberToken and a cast to float.
+std::string writeFloat(float value);
+
 /// The shortest text that reads back as @p value, always with a '.' or an exponent.
 std::string writeDouble(double value);
 

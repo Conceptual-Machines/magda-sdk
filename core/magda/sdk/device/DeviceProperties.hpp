@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "magda/sdk/device/ParameterDescriptor.hpp"
 #include "magda/sdk/device/SidechainPort.hpp"
 
 namespace magda::sdk {
@@ -11,6 +12,14 @@ struct DeviceProperties {
     std::string pluginId;
     std::string name;
     std::string shortName;
+
+    /// The parameter manifest's deviceVersion. Starts at 1; bump it when the parameter set changes.
+    int deviceVersion = 1;
+
+    /// Static: the manifest lists the parameters. State: the device's saved state decides them
+    /// and the manifest lists the generic slots.
+    ParameterSource parameterSource = ParameterSource::Static;
+
     bool takesMidiInput = false;
 
     /// The device emits MIDI of its own, written to ProcessContext::midiOut. Its input never
