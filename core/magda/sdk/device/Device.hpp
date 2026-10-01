@@ -5,6 +5,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "magda/sdk/device/DeviceHost.hpp"
 #include "magda/sdk/device/DeviceProperties.hpp"
