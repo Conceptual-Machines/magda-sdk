@@ -9,6 +9,10 @@ target_link_libraries(magda_sdk_smoke_test PRIVATE magda::sdk_core)
 add_test(NAME magda_sdk_smoke COMMAND magda_sdk_smoke_test)
 
 add_executable(magda_sdk_tests
+    test_binary_text.cpp
+    test_device_interface.cpp
+    test_state_codec.cpp
+    test_state_node.cpp
     test_farbot.cpp
     test_launch_tap.cpp
     test_metering_buffer.cpp

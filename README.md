@@ -23,4 +23,7 @@ Farbot (`RealtimeObject`, `fifo`) is vendored header-only under `core/third_part
 license kept alongside) rather than reimplemented. Include it as `<farbot/...>`; the boundary
 check skips the quoted-include rule there but still forbids JUCE, DOM and Tracktion includes.
 
+The device contract is `core/magda/sdk/device/` (see `docs/device-interface.md`) and its saved
+state is `core/magda/sdk/state/` (see `docs/device-state.md`).
+
 Licensed under MIT.
