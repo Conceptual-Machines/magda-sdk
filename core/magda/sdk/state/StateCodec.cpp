@@ -5,6 +5,7 @@
 #include "magda/sdk/state/BinaryText.hpp"
 #include "magda/sdk/state/detail/Json.hpp"
 #include "magda/sdk/state/detail/NumberText.hpp"
+#include "magda/sdk/state/detail/StateJson.hpp"
 
 namespace magda::sdk {
 
@@ -239,10 +240,14 @@ DecodeResult decodeDocument(std::string_view json) {
     const auto parsed = detail::parseJson(json, error, kMaxStateDepth * 2 + 8);
     if (!parsed)
         return refuse(DecodeStatus::NotJson, error);
+    return detail::decodeDocumentValue(*parsed);
+}
 
-    const auto* schema = parsed->member("schema");
-    const auto* device = parsed->member("device");
-    if (parsed->type != JsonValue::Type::Object || schema == nullptr || device == nullptr)
+DecodeResult detail::decodeDocumentValue(const JsonValue& parsed) {
+    std::string error;
+    const auto* schema = parsed.member("schema");
+    const auto* device = parsed.member("device");
+    if (parsed.type != JsonValue::Type::Object || schema == nullptr || device == nullptr)
         return refuse(DecodeStatus::NotADocument, "not a device state document");
 
     if (schema->type != JsonValue::Type::Int)
@@ -259,7 +264,7 @@ DecodeResult decodeDocument(std::string_view json) {
     document.schema = static_cast<int>(schema->integer);
     document.deviceType = device->string;
 
-    if (!decodeNodeBody(*parsed, true, 1, document.root, error))
+    if (!decodeNodeBody(parsed, true, 1, document.root, error))
         return refuse(DecodeStatus::Invalid, error);
 
     DecodeResult result;
