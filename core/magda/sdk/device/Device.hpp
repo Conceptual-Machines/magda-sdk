@@ -87,7 +87,8 @@ class Device {
     /// Audio. Allocation-free.
     virtual void process(ProcessContext& context) = 0;
 
-    /// Control. Parameters are addressed by slot, in [0, parameterCount()), values normalized to [0, 1].
+    /// Control. Parameters are addressed by slot, in [0, parameterCount()), values normalized to
+    /// [0, 1].
     virtual int parameterCount() const {
         return 0;
     }

@@ -35,9 +35,8 @@ class Parser {
     }
 
     void skipSpace() {
-        while (pos_ < text_.size() &&
-               (text_[pos_] == ' ' || text_[pos_] == '\t' || text_[pos_] == '\n' ||
-                text_[pos_] == '\r'))
+        while (pos_ < text_.size() && (text_[pos_] == ' ' || text_[pos_] == '\t' ||
+                                       text_[pos_] == '\n' || text_[pos_] == '\r'))
             ++pos_;
     }
 
@@ -272,7 +271,9 @@ class Parser {
 
     bool parseNumber(JsonValue& out) {
         const auto start = pos_;
-        const auto digit = [&] { return pos_ < text_.size() && text_[pos_] >= '0' && text_[pos_] <= '9'; };
+        const auto digit = [&] {
+            return pos_ < text_.size() && text_[pos_] >= '0' && text_[pos_] <= '9';
+        };
 
         if (pos_ < text_.size() && text_[pos_] == '-')
             ++pos_;
@@ -321,8 +322,9 @@ class Parser {
                 magnitude = magnitude * 10 + d;
             }
 
-            const auto limit = static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) +
-                               (negative ? 1u : 0u);
+            const auto limit =
+                static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) +
+                (negative ? 1u : 0u);
             if (fits && magnitude <= limit) {
                 out.type = JsonValue::Type::Int;
                 out.integer = negative ? static_cast<std::int64_t>(0 - magnitude)

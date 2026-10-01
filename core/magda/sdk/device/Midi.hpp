@@ -177,7 +177,8 @@ struct MidiEventPosition {
 };
 
 /**
- * @brief The sample a time @p seconds into the block falls in at @p sampleRate, and how far into it.
+ * @brief The sample a time @p seconds into the block falls in at @p sampleRate, and how far into
+ * it.
  *
  * Floor with a hundredth of a sample of slack, so a time that lands 0.001 short of a sample
  * boundary plays on that sample.
