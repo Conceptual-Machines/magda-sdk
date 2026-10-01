@@ -28,4 +28,6 @@ state is `core/magda/sdk/state/` (see `docs/device-state.md`). The portable pres
 `core/magda/sdk/preset/` (see `docs/preset.md`). Curves, with their evaluators, are
 `core/magda/sdk/curve/` (see `docs/curve.md`).
 
+DSP primitives (biquad, polyphase oversampler, RNG) are in `core/magda/sdk/dsp/` (see `docs/dsp.md`).
+
 Licensed under MIT.

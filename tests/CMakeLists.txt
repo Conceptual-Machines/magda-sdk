@@ -10,6 +10,7 @@ add_test(NAME magda_sdk_smoke COMMAND magda_sdk_smoke_test)
 
 add_executable(magda_sdk_tests
     test_binary_text.cpp
+    test_biquad.cpp
     test_curve.cpp
     test_curve_evaluation.cpp
     test_device_interface.cpp
@@ -20,8 +21,10 @@ add_executable(magda_sdk_tests
     test_farbot.cpp
     test_launch_tap.cpp
     test_metering_buffer.cpp
+    test_oversampler.cpp
     test_parameter_queue.cpp
     test_preset.cpp
+    test_random.cpp
     test_sidechain_bus.cpp
     test_taps.cpp
     test_value_tap.cpp)
