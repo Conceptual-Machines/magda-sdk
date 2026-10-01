@@ -81,7 +81,8 @@ class LevelTap {
      * A maximum rather than an assignment, so no block is lost between two
      * reads however short the blocks are and however slowly the reader polls.
      */
-    void write(ConstBufferView block, int numSamples) {
+    void write(ConstBufferView block) {
+        const auto numSamples = block.numFrames();
         if (numSamples <= 0)
             return;
 

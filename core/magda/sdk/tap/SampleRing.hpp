@@ -92,7 +92,8 @@ class SampleRing {
      * drop the block: one is forbidden here and the other is a display that goes
      * blank exactly when a host changes its buffer size.
      */
-    void writeDownmix(ConstBufferView block, int numSamples) {
+    void writeDownmix(ConstBufferView block) {
+        const auto numSamples = block.numFrames();
         const auto channels = block.numChannels();
         if (numSamples <= 0 || channels <= 0)
             return;

@@ -24,14 +24,15 @@ struct Block {
         : left(left), right(right) {}
 
     magda::ConstBufferView view() const {
-        const std::array<const float*, 2> channels{left.data(), right.data()};
-        return magda::ConstBufferView(channels.data(), 2, numSamples());
+        pointers = {left.data(), right.data()};
+        return magda::ConstBufferView(pointers.data(), 2, numSamples());
     }
 
     int numSamples() const {
         return static_cast<int>(left.size());
     }
 
+    mutable std::array<const float*, 2> pointers{};
     std::vector<float> left;
     std::vector<float> right;
 };
@@ -42,7 +43,7 @@ TEST_CASE("A level tap reports each channel's own peak", "[engine][tap]") {
     LevelTap tap;
     const Block block({0.25f, -0.5f}, {0.1f, 0.75f});
 
-    tap.write(block.view(), block.numSamples());
+    tap.write(block.view());
 
     const auto levels = tap.read();
     CHECK(levels.peak[0] == approx(0.5f));
@@ -56,16 +57,16 @@ TEST_CASE("A level tap reports the loudest block since it was read, not the last
     // The transient is in the middle. A meter that reported the most recent
     // block would show the quiet one that followed it, which is how a drum hit
     // goes missing on a display that is not polling fast enough.
-    tap.write(Block({0.2f}, {0.2f}).view(), 1);
-    tap.write(Block({0.9f}, {0.9f}).view(), 1);
-    tap.write(Block({0.1f}, {0.1f}).view(), 1);
+    tap.write(Block({0.2f}, {0.2f}).view());
+    tap.write(Block({0.9f}, {0.9f}).view());
+    tap.write(Block({0.1f}, {0.1f}).view());
 
     CHECK(tap.read().loudest() == approx(0.9f));
 }
 
 TEST_CASE("Reading a level tap starts it again", "[engine][tap]") {
     LevelTap tap;
-    tap.write(Block({0.6f}, {0.6f}).view(), 1);
+    tap.write(Block({0.6f}, {0.6f}).view());
 
     REQUIRE(tap.read().loudest() == approx(0.6f));
 
@@ -76,8 +77,8 @@ TEST_CASE("Reading a level tap starts it again", "[engine][tap]") {
 
 TEST_CASE("Silence written to a level tap does not lower what has not been read", "[engine][tap]") {
     LevelTap tap;
-    tap.write(Block({0.8f}, {0.8f}).view(), 1);
-    tap.write(Block({0.0f}, {0.0f}).view(), 1);
+    tap.write(Block({0.8f}, {0.8f}).view());
+    tap.write(Block({0.0f}, {0.0f}).view());
 
     // How fast a meter falls is the reader's cadence. A silent block that took
     // the peak back down would make it the block size instead, so a hit landing
@@ -91,7 +92,7 @@ TEST_CASE("A level tap reports a mono block on both channels", "[engine][tap]") 
     const std::array<float, 1> mono{0.4f};
     const std::array<const float*, 1> monoChannels{mono.data()};
 
-    tap.write(magda::ConstBufferView(monoChannels.data(), 1, 1), 1);
+    tap.write(magda::ConstBufferView(monoChannels.data(), 1, 1));
 
     const auto levels = tap.read();
     CHECK(levels.peak[0] == approx(0.4f));
@@ -100,7 +101,7 @@ TEST_CASE("A level tap reports a mono block on both channels", "[engine][tap]") 
 
 TEST_CASE("A cleared level tap has nothing to report", "[engine][tap]") {
     LevelTap tap;
-    tap.write(Block({0.9f}, {0.9f}).view(), 1);
+    tap.write(Block({0.9f}, {0.9f}).view());
 
     tap.clear();
 
@@ -188,7 +189,7 @@ TEST_CASE("A sample ring downmixes without a maximum block size", "[engine][tap]
     const std::vector<float> right(static_cast<std::size_t>(numSamples), 0.0f);
     const std::array<const float*, 2> stereo{left.data(), right.data()};
 
-    ring.writeDownmix(magda::ConstBufferView(stereo.data(), 2, numSamples), numSamples);
+    ring.writeDownmix(magda::ConstBufferView(stereo.data(), 2, numSamples));
 
     std::vector<float> read(1);
     ring.readLatest(read.data(), 1);
@@ -262,7 +263,7 @@ TEST_CASE("A level tap loses nothing to a reader running beside the writer", "[e
             const auto level = i == kWrites / 2 ? 1.0f : 0.25f;
             const std::array<float, 1> sample{level};
             const std::array<const float*, 2> channels{sample.data(), sample.data()};
-            tap.write(magda::ConstBufferView(channels.data(), 2, 1), 1);
+            tap.write(magda::ConstBufferView(channels.data(), 2, 1));
         }
         writing = false;
     });
@@ -276,16 +277,36 @@ TEST_CASE("A level tap loses nothing to a reader running beside the writer", "[e
     CHECK(sawTheTransient);
 }
 
-TEST_CASE("A buffer view offsets each channel and reads as const", "[buffer-view]") {
+TEST_CASE("A buffer view holds the host's array and reads as const", "[buffer-view]") {
     std::array<float, 4> left{0.0f, 1.0f, 2.0f, 3.0f};
     std::array<float, 4> right{4.0f, 5.0f, 6.0f, 7.0f};
     const std::array<float*, 2> channels{left.data(), right.data()};
 
-    const magda::BufferView view(channels.data(), 2, 2, 2);
+    const magda::BufferView view(channels.data(), 2, 4);
     const magda::ConstBufferView readOnly = view;
 
     CHECK(readOnly.numChannels() == 2);
-    CHECK(readOnly.numFrames() == 2);
-    CHECK(readOnly.channel(0)[0] == approx(2.0f));
-    CHECK(readOnly.channel(1)[1] == approx(7.0f));
+    CHECK(readOnly.numFrames() == 4);
+    CHECK(readOnly.channels() == channels.data());
+    CHECK(readOnly.channel(0)[2] == approx(2.0f));
+    CHECK(readOnly.channel(1)[3] == approx(7.0f));
+}
+
+TEST_CASE("A buffer view has no channel cap", "[buffer-view]") {
+    constexpr int kChannels = 64;
+    std::array<float, 2> samples{0.5f, -0.25f};
+    std::array<float*, kChannels> channels;
+    channels.fill(samples.data());
+
+    LevelTap tap;
+    const magda::ConstBufferView view(channels.data(), kChannels, 2);
+    CHECK(view.numChannels() == kChannels);
+    tap.write(view);
+    CHECK(tap.read().peak[0] == approx(0.5f));
+}
+
+TEST_CASE("A null or empty buffer view reads as zero channels", "[buffer-view]") {
+    const magda::ConstBufferView none(nullptr, 2, 8);
+    CHECK(none.numChannels() == 0);
+    CHECK(magda::ConstBufferView().numFrames() == 0);
 }
