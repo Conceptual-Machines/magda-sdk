@@ -19,4 +19,8 @@ Wasm (Emscripten, SIMD, no pthreads):
 Consume from a parent project with `add_subdirectory` and link `magda::sdk_core`.
 Tests are built only when this is the top-level project.
 
+Farbot (`RealtimeObject`, `fifo`) is vendored header-only under `core/third_party/farbot` (MIT,
+license kept alongside) rather than reimplemented. Include it as `<farbot/...>`; the boundary
+check skips the quoted-include rule there but still forbids JUCE, DOM and Tracktion includes.
+
 Licensed under MIT.

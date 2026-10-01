@@ -17,6 +17,10 @@ target_include_directories(magda_sdk_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>)
 target_compile_features(magda_sdk_core PUBLIC cxx_std_23)
 
+# Vendored header-only farbot (MIT): `#include <farbot/...>` resolves through this target.
+target_include_directories(magda_sdk_core SYSTEM PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core/third_party/farbot/include>)
+
 if(EMSCRIPTEN)
     target_compile_options(magda_sdk_core PUBLIC -msimd128)
 endif()
