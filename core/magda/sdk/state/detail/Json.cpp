@@ -447,4 +447,87 @@ bool appendJsonString(std::string& out, std::string_view text) {
     return true;
 }
 
+namespace {
+
+void appendBreak(std::string& out, int indent) {
+    out.push_back('\n');
+    out.append(static_cast<std::size_t>(indent) * 2, ' ');
+}
+
+}  // namespace
+
+bool appendJson(std::string& out, const JsonValue& value, int indent, std::string& error) {
+    const bool pretty = indent >= 0;
+    switch (value.type) {
+        case JsonValue::Type::Null:
+            out += "null";
+            return true;
+        case JsonValue::Type::Bool:
+            out += value.boolean ? "true" : "false";
+            return true;
+        case JsonValue::Type::Int:
+            out += std::to_string(value.integer);
+            return true;
+        case JsonValue::Type::Double:
+            if (!std::isfinite(value.real)) {
+                error = "non-finite number";
+                return false;
+            }
+            out += writeDouble(value.real);
+            return true;
+        case JsonValue::Type::String:
+            if (!appendJsonString(out, value.string)) {
+                error = "string is not valid UTF-8";
+                return false;
+            }
+            return true;
+        case JsonValue::Type::Array: {
+            if (value.array.empty()) {
+                out += "[]";
+                return true;
+            }
+            out.push_back('[');
+            bool first = true;
+            for (const auto& item : value.array) {
+                out += first ? "" : ",";
+                first = false;
+                if (pretty)
+                    appendBreak(out, indent + 1);
+                if (!appendJson(out, item, pretty ? indent + 1 : -1, error))
+                    return false;
+            }
+            if (pretty)
+                appendBreak(out, indent);
+            out.push_back(']');
+            return true;
+        }
+        case JsonValue::Type::Object: {
+            if (value.object.empty()) {
+                out += "{}";
+                return true;
+            }
+            out.push_back('{');
+            bool first = true;
+            for (const auto& [name, member] : value.object) {
+                out += first ? "" : ",";
+                first = false;
+                if (pretty)
+                    appendBreak(out, indent + 1);
+                if (!appendJsonString(out, name)) {
+                    error = "member name is not valid UTF-8";
+                    return false;
+                }
+                out += pretty ? ": " : ":";
+                if (!appendJson(out, member, pretty ? indent + 1 : -1, error))
+                    return false;
+            }
+            if (pretty)
+                appendBreak(out, indent);
+            out.push_back('}');
+            return true;
+        }
+    }
+    return false;
+}
+
 }  // namespace magda::sdk::detail

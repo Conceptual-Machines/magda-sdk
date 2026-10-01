@@ -19,6 +19,7 @@ add_executable(magda_sdk_tests
     test_launch_tap.cpp
     test_metering_buffer.cpp
     test_parameter_queue.cpp
+    test_preset.cpp
     test_sidechain_bus.cpp
     test_taps.cpp
     test_value_tap.cpp)

@@ -36,6 +36,15 @@ std::optional<JsonValue> parseJson(std::string_view text, std::string& error, in
 /// Append @p text as a quoted JSON string. False, appending nothing, for invalid UTF-8.
 bool appendJsonString(std::string& out, std::string_view text);
 
+/**
+ * @brief Append @p value as JSON, objects in member order, doubles as the shortest text that reads
+ *        back (always with a '.' or exponent, so Int and Double survive).
+ *
+ * Compact when @p indent is negative, else pretty-printed with two spaces per level starting at
+ * @p indent. False, saying why in @p error, for invalid UTF-8 or a non-finite double.
+ */
+bool appendJson(std::string& out, const JsonValue& value, int indent, std::string& error);
+
 bool isValidUtf8(std::string_view text);
 
 }  // namespace magda::sdk::detail

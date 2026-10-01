@@ -24,6 +24,7 @@ license kept alongside) rather than reimplemented. Include it as `<farbot/...>`;
 check skips the quoted-include rule there but still forbids JUCE, DOM and Tracktion includes.
 
 The device contract is `core/magda/sdk/device/` (see `docs/device-interface.md`) and its saved
-state is `core/magda/sdk/state/` (see `docs/device-state.md`).
+state is `core/magda/sdk/state/` (see `docs/device-state.md`). The portable preset is
+`core/magda/sdk/preset/` (see `docs/preset.md`).
 
 Licensed under MIT.
