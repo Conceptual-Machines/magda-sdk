@@ -86,7 +86,11 @@ TEST_CASE("Numbers and bools coerce across kinds like juce::var", "[state-node]"
     CHECK(node.getString("i") == "60");
 
     node.setInt("big", std::int64_t{1} << 33);
-    CHECK(node.getInt("big") == 0);
+    CHECK(node.getInt("big") == std::numeric_limits<int>::max());
+    node.setInt("small", -(std::int64_t{1} << 33));
+    CHECK(node.getInt("small") == std::numeric_limits<int>::min());
+    CHECK(withString("99999999999").getInt("k") == std::numeric_limits<int>::max());
+    CHECK(withString("-99999999999").getInt("k") == std::numeric_limits<int>::min());
     CHECK(node.getInt64("big") == (std::int64_t{1} << 33));
 
     node.setDouble("zero", 0.0);

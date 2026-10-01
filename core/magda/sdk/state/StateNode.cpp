@@ -65,6 +65,11 @@ std::int64_t readInteger(std::string_view text) {
                     : static_cast<std::int64_t>(magnitude);
 }
 
+int clampToInt(std::int64_t value) {
+    return static_cast<int>(std::clamp<std::int64_t>(value, std::numeric_limits<int>::min(),
+                                                      std::numeric_limits<int>::max()));
+}
+
 template <typename Int> Int saturatingCast(double value) {
     if (value >= static_cast<double>(std::numeric_limits<Int>::max()))
         return std::numeric_limits<Int>::max();
@@ -140,13 +145,13 @@ std::int64_t StateValue::toInt64() const {
 int StateValue::toInt() const {
     switch (kind()) {
         case Kind::Int64:
-            return static_cast<int>(*int64());
+            return clampToInt(*int64());
         case Kind::Double:
             return saturatingCast<int>(*real());
         case Kind::Bool:
             return *boolean() ? 1 : 0;
         case Kind::String:
-            return static_cast<int>(readInteger(*string()));
+            return clampToInt(readInteger(*string()));
         case Kind::Binary:
             return 0;
     }
