@@ -18,6 +18,7 @@ add_library(magda_sdk_core STATIC
     core/magda/sdk/curve/ModCurve.cpp
     core/magda/sdk/device/ParameterDescriptor.cpp
     core/magda/sdk/device/ParameterManifest.cpp
+    core/magda/sdk/peaks/PeakData.cpp
     core/magda/sdk/preset/Preset.cpp
     core/magda/sdk/state/BinaryText.cpp
     core/magda/sdk/state/StateCodec.cpp
