@@ -10,3 +10,5 @@ Header-only, allocation-free to process, in `core/magda/sdk/dsp/`.
   latency is `tapsPerPhase - 1` base-rate samples. `prepare()` allocates; nothing else does.
 - `Random.hpp`: `Lcg48Random` reproduces `juce::Random` for the same seed and call pattern;
   `SplitMix64` and `Xoshiro256` are for new code.
+- `Fft.hpp`, `Window.hpp`, `LagrangeResampler.hpp`: the real FFT (vendored pffft), the windowing
+  tables and the five-point Lagrange resampler. See `fft.md`.
