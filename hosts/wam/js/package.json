@@ -1,0 +1,24 @@
+{
+  "name": "@conceptual-machines/magda-sdk-wam",
+  "version": "0.1.0",
+  "description": "WAM 2 host for MAGDA SDK devices: the C ABI over wasm, a WamProcessor and a WebAudioModule factory",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./abi": "./src/getMagdaDeviceAbi.js"
+  },
+  "files": ["src"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Conceptual-Machines/magda-sdk.git",
+    "directory": "hosts/wam/js"
+  },
+  "dependencies": {
+    "@webaudiomodules/sdk": "^0.0.12"
+  },
+  "devDependencies": {
+    "@webaudiomodules/api": "^2.0.0-alpha.6"
+  }
+}

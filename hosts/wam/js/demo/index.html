@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAGDA WAM Host</title>
+<script type="importmap">
+{ "imports": { "@webaudiomodules/sdk": "../node_modules/@webaudiomodules/sdk/dist/index.js" } }
+</script>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 16px; max-width: 640px; }
+  label { display: grid; grid-template-columns: 120px 1fr 80px; gap: 8px; align-items: center; margin: 6px 0; }
+  pre { background: #f4f4f4; padding: 8px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>MAGDA WAM Host</h1>
+<p>Query: <code>?wasm=&amp;descriptor=&amp;device=</code>. The check renders offline through the WAM and through the ABI directly.</p>
+<button id="play">Play</button> <button id="check">Run check</button>
+<div id="params"></div>
+<pre id="result">idle</pre>
+<script type="module">
+import { initializeWamHost } from '@webaudiomodules/sdk';
+import createMagdaWam from '../src/createMagdaWam.js';
+import getMagdaDeviceAbi from '../src/getMagdaDeviceAbi.js';
+
+const query = new URLSearchParams(location.search);
+const wasmUrl = new URL(query.get('wasm') ?? './module.wasm', location.href);
+const descriptorUrl = new URL(query.get('descriptor') ?? './descriptor.json', location.href);
+const deviceType = query.get('device');
+const Wam = createMagdaWam({ wasmUrl, descriptorUrl, deviceType });
+const result = document.getElementById('result');
+
+async function instantiate(context) {
+  const [hostGroupId] = await initializeWamHost(context);
+  return Wam.createInstance(hostGroupId, context);
+}
+
+async function check() {
+  const sampleRate = 48000;
+  const frames = 4800;
+  const offline = new OfflineAudioContext({ numberOfChannels: 2, length: frames, sampleRate });
+  const wam = await instantiate(offline);
+  const info = await wam.audioNode.getParameterInfo();
+  wam.audioNode.connect(offline.destination);
+  const rendered = await offline.startRendering();
+
+  const { MagdaDeviceModule } = getMagdaDeviceAbi();
+  const module = new MagdaDeviceModule(await (await fetch(wasmUrl)).arrayBuffer());
+  const device = module.create(deviceType);
+  device.prepare(sampleRate, 128, 2);
+  const direct = [new Float32Array(frames), new Float32Array(frames)];
+  for (let start = 0; start < frames; start += 128) device.process(direct, start, Math.min(frames, start + 128));
+  const state = await wam.audioNode.getState();
+
+  let maxDiff = 0, peak = 0;
+  for (let c = 0; c < 2; c++) {
+    const channel = rendered.getChannelData(c);
+    for (let i = 0; i < frames; i++) {
+      maxDiff = Math.max(maxDiff, Math.abs(channel[i] - direct[c][i]));
+      peak = Math.max(peak, Math.abs(channel[i]));
+    }
+  }
+  const ok = maxDiff === 0 && peak > 0;
+  result.textContent = `${ok ? 'PASS' : 'FAIL'} max diff ${maxDiff} peak ${peak.toFixed(4)}\n` +
+    `parameters ${Object.keys(info).join(', ')}\nstate ${JSON.stringify(state)}`;
+  result.dataset.status = ok ? 'pass' : 'fail';
+}
+
+let live;
+async function play() {
+  if (live) { await live.context.close(); live = undefined; return; }
+  const context = new AudioContext();
+  const wam = await instantiate(context);
+  wam.audioNode.connect(context.destination);
+  live = { context, wam };
+  const info = await wam.audioNode.getParameterInfo();
+  const params = document.getElementById('params');
+  params.replaceChildren(...Object.values(info).map((p) => {
+    const label = document.createElement('label');
+    const input = Object.assign(document.createElement('input'), {
+      type: 'range', min: p.minValue, max: p.maxValue, step: p.discreteStep || 0.001, value: p.defaultValue,
+    });
+    const value = document.createElement('span');
+    value.textContent = p.defaultValue;
+    input.oninput = () => {
+      value.textContent = input.value;
+      wam.audioNode.setParameterValues({ [p.id]: { id: p.id, value: Number(input.value), normalized: false } });
+    };
+    label.append(p.label, input, value);
+    return label;
+  }));
+}
+
+document.getElementById('check').onclick = () => check().catch((e) => { result.textContent = `FAIL ${e.stack}`; result.dataset.status = 'fail'; });
+document.getElementById('play').onclick = () => play();
+if (query.has('autocheck')) document.getElementById('check').click();
+</script>
+</body>
+</html>

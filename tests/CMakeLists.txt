@@ -50,6 +50,10 @@ option(MAGDA_SDK_EXACT_PINS "Check bit-exact output pins (valid only for a Debug
 if(MAGDA_SDK_EXACT_PINS)
     target_compile_definitions(magda_sdk_tests PRIVATE MAGDA_SDK_EXACT_PINS)
 endif()
+add_executable(magda_sdk_abi_tests abi/test_device_abi.cpp)
+target_link_libraries(magda_sdk_abi_tests PRIVATE sdk_reference_module Catch2::Catch2WithMain)
+
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 catch_discover_tests(magda_sdk_tests)
+catch_discover_tests(magda_sdk_abi_tests)

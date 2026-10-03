@@ -1,0 +1,14 @@
+{
+  "format": "magda.parity-corpus",
+  "version": 1,
+  "cases": [
+    { "name": "sine-default", "device": "sdkReferenceSine", "frames": 48000 },
+    { "name": "sine-low-44k-odd-block", "device": "sdkReferenceSine", "sampleRate": 44100, "blockSize": 97,
+      "frames": 20000, "parameters": { "frequency": 0.1, "level": 1.0 } },
+    { "name": "sine-inverted-notes", "device": "sdkReferenceSine", "frames": 24000,
+      "state": { "schema": 2, "device": "sdkReferenceSine", "props": { "inverted": true } },
+      "midi": [ { "sample": 1000, "bytes": [144, 72, 100] }, { "sample": 9001, "bytes": [144, 48, 100] } ] },
+    { "name": "gain-on-sine", "device": "sdkReferenceGain", "frames": 9600, "input": "sine",
+      "inputFrequency": 997, "parameters": { "gain": 0.8 } }
+  ]
+}
