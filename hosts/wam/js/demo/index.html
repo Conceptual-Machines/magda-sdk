@@ -15,7 +15,7 @@
 </head>
 <body>
 <h1>MAGDA WAM Host</h1>
-<p>Query: <code>?wasm=&amp;descriptor=&amp;device=</code>. The check renders offline through the WAM and through the ABI directly.</p>
+<p>Query: <code>?wasm=&amp;descriptor=&amp;device=</code>. The check renders offline through the WAM and through the ABI directly; an effect gets a 220 Hz sine.</p>
 <button id="play">Play</button> <button id="check">Run check</button>
 <div id="params"></div>
 <pre id="result">idle</pre>
@@ -42,6 +42,16 @@ async function check() {
   const offline = new OfflineAudioContext({ numberOfChannels: 2, length: frames, sampleRate });
   const wam = await instantiate(offline);
   const info = await wam.audioNode.getParameterInfo();
+  const input = Float32Array.from({ length: frames }, (_, i) => Math.fround(0.5 * Math.sin(2 * Math.PI * 220 * i / sampleRate)));
+  const hasInput = wam.descriptor.hasAudioInput;
+  if (hasInput) {
+    const buffer = offline.createBuffer(2, frames, sampleRate);
+    buffer.copyToChannel(input, 0);
+    buffer.copyToChannel(input, 1);
+    const source = new AudioBufferSourceNode(offline, { buffer });
+    source.connect(wam.audioNode);
+    source.start();
+  }
   wam.audioNode.connect(offline.destination);
   const rendered = await offline.startRendering();
 
@@ -49,7 +59,7 @@ async function check() {
   const module = new MagdaDeviceModule(await (await fetch(wasmUrl)).arrayBuffer());
   const device = module.create(deviceType);
   device.prepare(sampleRate, 128, 2);
-  const direct = [new Float32Array(frames), new Float32Array(frames)];
+  const direct = hasInput ? [input.slice(), input.slice()] : [new Float32Array(frames), new Float32Array(frames)];
   for (let start = 0; start < frames; start += 128) device.process(direct, start, Math.min(frames, start + 128));
   const state = await wam.audioNode.getState();
 
