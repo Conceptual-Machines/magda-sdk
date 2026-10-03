@@ -23,6 +23,7 @@ add_executable(magda_sdk_tests
     test_metering_buffer.cpp
     test_oversampler.cpp
     test_parameter_queue.cpp
+    test_peak_data.cpp
     test_preset.cpp
     test_random.cpp
     test_sidechain_bus.cpp

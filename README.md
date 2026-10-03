@@ -26,7 +26,8 @@ check skips the quoted-include rule there but still forbids JUCE, DOM and Trackt
 The device contract is `core/magda/sdk/device/` (see `docs/device-interface.md`) and its saved
 state is `core/magda/sdk/state/` (see `docs/device-state.md`). The portable preset is
 `core/magda/sdk/preset/` (see `docs/preset.md`). Curves, with their evaluators, are
-`core/magda/sdk/curve/` (see `docs/curve.md`).
+`core/magda/sdk/curve/` (see `docs/curve.md`). Waveform peaks are `core/magda/sdk/peaks/` (see
+`docs/peaks.md`).
 
 DSP primitives (biquad, polyphase oversampler, RNG) are in `core/magda/sdk/dsp/` (see `docs/dsp.md`).
 
