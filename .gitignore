@@ -4,3 +4,6 @@ cmake-build-*/
 .cache/
 .idea/
 .vscode/
+node_modules/
+hosts/wam/js/demo/*.wasm
+hosts/wam/js/demo/*.json

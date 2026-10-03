@@ -70,6 +70,20 @@ if(EMSCRIPTEN)
     target_compile_options(magda_sdk_core PUBLIC -msimd128)
 endif()
 
+# The C ABI (docs/abi.md). Whoever links it defines magda::sdk::abi::moduleDevices().
+add_library(magda_sdk_abi STATIC core/magda/sdk/abi/DeviceAbi.cpp)
+add_library(magda::sdk_abi ALIAS magda_sdk_abi)
+target_link_libraries(magda_sdk_abi PUBLIC magda::sdk_core)
+
+set(MAGDA_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}" CACHE INTERNAL "")
+include(cmake/MagdaSdkDeviceModule.cmake)
+include(hosts/juce/MagdaSdkJucePlugin.cmake)
+
+option(MAGDA_SDK_BUILD_REFERENCE_MODULE "Build the reference device module" ${PROJECT_IS_TOP_LEVEL})
+if(MAGDA_SDK_BUILD_REFERENCE_MODULE)
+    magda_sdk_add_device_module(sdk_reference SOURCES tests/abi/ReferenceDevices.cpp)
+endif()
+
 option(MAGDA_SDK_BUILD_TESTS "Build the SDK tests" ${PROJECT_IS_TOP_LEVEL})
 if(MAGDA_SDK_BUILD_TESTS)
     enable_testing()
