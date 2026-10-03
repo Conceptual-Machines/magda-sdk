@@ -32,6 +32,10 @@ add_executable(magda_sdk_tests
     test_preset.cpp
     test_random.cpp
     test_sidechain_bus.cpp
+    test_published_pattern.cpp
+    test_step_clock.cpp
+    test_step_sequencer_core.cpp
+    test_step_sequencer_identity.cpp
     test_taps.cpp
     test_value_tap.cpp)
 target_link_libraries(magda_sdk_tests PRIVATE magda::sdk_core Catch2::Catch2WithMain)
