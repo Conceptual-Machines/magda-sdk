@@ -21,6 +21,11 @@ add_executable(magda_sdk_tests
     test_farbot.cpp
     test_launch_tap.cpp
     test_metering_buffer.cpp
+    test_mod_adsr.cpp
+    test_mod_follower.cpp
+    test_mod_lfo.cpp
+    test_mod_random.cpp
+    test_mod_sample_identity.cpp
     test_oversampler.cpp
     test_parameter_queue.cpp
     test_peak_data.cpp
