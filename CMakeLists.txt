@@ -17,6 +17,8 @@ add_library(magda_sdk_pffft STATIC
 target_include_directories(magda_sdk_pffft PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core/third_party/pffft/include>
     PRIVATE core/third_party/pffft/include/pffft core/third_party/pffft/src)
+# pffft.h declares its API dllimport on Windows unless told the library is static.
+target_compile_definitions(magda_sdk_pffft PUBLIC PFFFT_STATIC_DEFINE)
 set_target_properties(magda_sdk_pffft PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(MSVC)
     target_compile_definitions(magda_sdk_pffft PRIVATE _USE_MATH_DEFINES)
