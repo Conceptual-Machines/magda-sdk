@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(magda_sdk VERSION 0.1.0 LANGUAGES CXX)
+project(magda_sdk VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,6 +10,24 @@ include(cmake/BoundaryCheck.cmake)
 configure_file(core/magda/sdk/version.hpp.in
     "${CMAKE_CURRENT_BINARY_DIR}/generated/magda/sdk/version_config.hpp" @ONLY)
 
+# Vendored pffft (BSD-style FFTPACK licence): the FFT behind magda/sdk/dsp/Fft.hpp.
+add_library(magda_sdk_pffft STATIC
+    core/third_party/pffft/src/pffft.c
+    core/third_party/pffft/src/pffft_common.c)
+target_include_directories(magda_sdk_pffft PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core/third_party/pffft/include>
+    PRIVATE core/third_party/pffft/include/pffft core/third_party/pffft/src)
+set_target_properties(magda_sdk_pffft PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    target_compile_definitions(magda_sdk_pffft PRIVATE _USE_MATH_DEFINES)
+else()
+    target_compile_options(magda_sdk_pffft PRIVATE -w)
+endif()
+if(EMSCRIPTEN)
+    target_compile_definitions(magda_sdk_pffft PRIVATE PFFFT_ENABLE_WASM)
+    target_compile_options(magda_sdk_pffft PRIVATE -msimd128)
+endif()
+
 add_library(magda_sdk_core STATIC
     core/magda/sdk/version.cpp
     core/magda/sdk/analysis/TransientDetector.cpp
@@ -19,6 +37,8 @@ add_library(magda_sdk_core STATIC
     core/magda/sdk/curve/ModCurve.cpp
     core/magda/sdk/device/ParameterDescriptor.cpp
     core/magda/sdk/device/ParameterManifest.cpp
+    core/magda/sdk/dsp/Fft.cpp
+    core/magda/sdk/dsp/Window.cpp
     core/magda/sdk/mod/ModAdsr.cpp
     core/magda/sdk/mod/ModFollower.cpp
     core/magda/sdk/mod/ModLfo.cpp
@@ -38,6 +58,7 @@ target_include_directories(magda_sdk_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>)
 target_compile_features(magda_sdk_core PUBLIC cxx_std_23)
+target_link_libraries(magda_sdk_core PRIVATE magda_sdk_pffft)
 
 # Vendored header-only farbot (MIT): `#include <farbot/...>` resolves through this target.
 target_include_directories(magda_sdk_core SYSTEM PUBLIC
