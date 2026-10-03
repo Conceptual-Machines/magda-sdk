@@ -51,10 +51,9 @@ TEST_CASE("The corpus is deterministic", "[mod][identity]") {
         CHECK(first[i].hash == second[i].hash);
 }
 
-// Float results differ in the last bit across compilers and platforms, so the
-// exact pins hold where they were captured. Everywhere else the behavioural
-// tests in test_mod_*.cpp are the check.
-#if defined(__APPLE__) && defined(__aarch64__)
+// Exact pins hold only on the machine and toolchain they were captured with (libm and
+// compilers differ in the last bit); MAGDA_SDK_EXACT_PINS turns them on there.
+#if defined(MAGDA_SDK_EXACT_PINS)
 TEST_CASE("The modulators reproduce magda-core's pre-move output", "[mod][identity]") {
     const std::vector<magda::modcorpus::Entry> pinned{
         {"lfo.free.shapes", 0xbcc218008662c36aULL},
