@@ -24,6 +24,9 @@ add_library(magda_sdk_core STATIC
     core/magda/sdk/mod/ModRandom.cpp
     core/magda/sdk/peaks/PeakData.cpp
     core/magda/sdk/preset/Preset.cpp
+    core/magda/sdk/sequencer/MonoStepSequencer.cpp
+    core/magda/sdk/sequencer/PolyStepSequencer.cpp
+    core/magda/sdk/sequencer/StepClock.cpp
     core/magda/sdk/state/BinaryText.cpp
     core/magda/sdk/state/StateCodec.cpp
     core/magda/sdk/state/StateNode.cpp
