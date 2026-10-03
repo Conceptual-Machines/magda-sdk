@@ -21,6 +21,11 @@ add_executable(magda_sdk_tests
     test_farbot.cpp
     test_launch_tap.cpp
     test_metering_buffer.cpp
+    test_mod_adsr.cpp
+    test_mod_follower.cpp
+    test_mod_lfo.cpp
+    test_mod_random.cpp
+    test_mod_sample_identity.cpp
     test_oversampler.cpp
     test_parameter_queue.cpp
     test_peak_data.cpp
@@ -31,6 +36,10 @@ add_executable(magda_sdk_tests
     test_value_tap.cpp)
 target_link_libraries(magda_sdk_tests PRIVATE magda::sdk_core Catch2::Catch2WithMain)
 target_include_directories(magda_sdk_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+option(MAGDA_SDK_EXACT_PINS "Check bit-exact output pins (valid only on the capture toolchain)" OFF)
+if(MAGDA_SDK_EXACT_PINS)
+    target_compile_definitions(magda_sdk_tests PRIVATE MAGDA_SDK_EXACT_PINS)
+endif()
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 catch_discover_tests(magda_sdk_tests)

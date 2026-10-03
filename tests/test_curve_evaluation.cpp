@@ -43,8 +43,8 @@ void expectGolden(const Hashes& got) {
         INFO(key);
         const auto it = goldenHashes().find(key);
         REQUIRE(it != goldenHashes().end());
-#if defined(__APPLE__) && defined(__aarch64__)
-        // Captured on this platform; libm and FMA contraction differ elsewhere.
+#if defined(MAGDA_SDK_EXACT_PINS)
+        // Captured with one toolchain; see MAGDA_SDK_EXACT_PINS.
         CHECK(hash == it->second);
 #endif
     }

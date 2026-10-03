@@ -30,5 +30,6 @@ state is `core/magda/sdk/state/` (see `docs/device-state.md`). The portable pres
 `docs/peaks.md`).
 
 DSP primitives (biquad, polyphase oversampler, RNG) are in `core/magda/sdk/dsp/` (see `docs/dsp.md`).
+The modulator cores (LFO, envelope, random, follower) are in `core/magda/sdk/mod/` (see `docs/modulators.md`).
 
 Licensed under MIT.
