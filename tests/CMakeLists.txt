@@ -10,6 +10,7 @@ add_test(NAME magda_sdk_smoke COMMAND magda_sdk_smoke_test)
 
 add_executable(magda_sdk_tests
     test_binary_text.cpp
+    test_block_peak.cpp
     test_biquad.cpp
     test_curve.cpp
     test_curve_evaluation.cpp
@@ -37,6 +38,8 @@ add_executable(magda_sdk_tests
     test_step_sequencer_core.cpp
     test_step_sequencer_identity.cpp
     test_taps.cpp
+    test_track_measurer.cpp
+    test_transient_detector.cpp
     test_value_tap.cpp)
 target_link_libraries(magda_sdk_tests PRIVATE magda::sdk_core Catch2::Catch2WithMain)
 target_include_directories(magda_sdk_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

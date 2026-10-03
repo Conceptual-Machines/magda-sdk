@@ -12,6 +12,7 @@ configure_file(core/magda/sdk/version.hpp.in
 
 add_library(magda_sdk_core STATIC
     core/magda/sdk/version.cpp
+    core/magda/sdk/analysis/TransientDetector.cpp
     core/magda/sdk/curve/AutomationCurve.cpp
     core/magda/sdk/curve/AutomationCurveSimplifier.cpp
     core/magda/sdk/curve/Curve.cpp
