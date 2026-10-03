@@ -29,4 +29,6 @@ state is `core/magda/sdk/state/` (see `docs/device-state.md`). The portable pres
 `core/magda/sdk/curve/` (see `docs/curve.md`). Waveform peaks are `core/magda/sdk/peaks/` (see
 `docs/peaks.md`).
 
+DSP primitives (biquad, polyphase oversampler, RNG) are in `core/magda/sdk/dsp/` (see `docs/dsp.md`).
+
 Licensed under MIT.
