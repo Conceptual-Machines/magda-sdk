@@ -1,0 +1,65 @@
+{
+  "format": "magda.waveform-view-scenarios",
+  "version": 1,
+  "cases": [
+    {"name": "fit", "size": [300, 100]},
+    {"name": "fit-from-peaks", "size": [300, 100], "source": {"peaks": true}},
+    {
+      "name": "markers-and-playhead", "size": [300, 100], "gain": 0.7,
+      "markers": {"start": 0.25, "end": 1.6, "loop": true, "loopStart": 0.5, "loopEnd": 1.2},
+      "playhead": 0.9
+    },
+    {
+      "name": "wheel-zoom", "size": [300, 100],
+      "events": [{"type": "zoom", "x": 150, "factor": 3.0}, {"type": "zoom", "x": 40, "factor": 2.0}]
+    },
+    {
+      "name": "wheel-zoom-from-peaks", "size": [300, 100], "source": {"peaks": true},
+      "events": [{"type": "zoom", "x": 150, "factor": 3.0}, {"type": "zoom", "x": 40, "factor": 2.0}]
+    },
+    {
+      "name": "command-drag-zoom", "size": [300, 100],
+      "events": [
+        {"type": "down", "x": 100, "y": 60, "mods": ["command"]},
+        {"type": "drag", "x": 100, "y": 20, "mods": ["command"]},
+        {"type": "up", "x": 100, "y": 20}
+      ]
+    },
+    {
+      "name": "alt-drag-scroll", "size": [300, 100],
+      "events": [
+        {"type": "zoom", "x": 0, "factor": 4.0},
+        {"type": "down", "x": 200, "y": 50, "mods": ["alt"]},
+        {"type": "drag", "x": 80, "y": 50, "mods": ["alt"]},
+        {"type": "up", "x": 80, "y": 50}
+      ]
+    },
+    {
+      "name": "drag-end-marker", "size": [300, 100],
+      "events": [
+        {"type": "down", "x": 297, "y": 50}, {"type": "drag", "x": 220, "y": 50},
+        {"type": "up", "x": 220, "y": 50}
+      ]
+    },
+    {
+      "name": "drag-start-marker", "size": [300, 100],
+      "events": [
+        {"type": "down", "x": 1, "y": 50}, {"type": "drag", "x": 45, "y": 50},
+        {"type": "up", "x": 45, "y": 50}
+      ]
+    },
+    {
+      "name": "shift-click-loop-start", "size": [300, 100],
+      "markers": {"loop": true, "loopStart": 0.2, "loopEnd": 1.8},
+      "events": [{"type": "down", "x": 75, "y": 50, "mods": ["shift"]}, {"type": "up", "x": 75, "y": 50}]
+    },
+    {
+      "name": "drag-loop-region", "size": [300, 100],
+      "markers": {"loop": true, "loopStart": 0.4, "loopEnd": 1.0},
+      "events": [
+        {"type": "down", "x": 90, "y": 4}, {"type": "drag", "x": 270, "y": 4},
+        {"type": "up", "x": 270, "y": 4}
+      ]
+    }
+  ]
+}

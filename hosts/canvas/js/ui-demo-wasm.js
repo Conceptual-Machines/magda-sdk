@@ -59,6 +59,27 @@ export async function loadUiDemo(bytes, measureText = (text) => 6 * text.length)
 			paint: (width, height, horizontal = false, zeroDbY = -1) =>
 				parse(exports.meter_demo_live_paint(width, height, horizontal ? 1 : 0, zeroDbY)),
 		},
+		waveform: {
+			runCase: (scenariosText, index) =>
+				withString(scenariosText, (pointer) => parse(exports.wave_demo_run_case(pointer, index))),
+			load: (samples, sampleRate) => {
+				const pointer = exports.malloc(samples.length * 4);
+				new Float32Array(memory.buffer, pointer, samples.length).set(samples);
+				exports.wave_demo_live_load(pointer, samples.length, sampleRate);
+				exports.free(pointer);
+			},
+			resize: (width, height) => exports.wave_demo_live_resize(width, height),
+			pointer: (type, x, y, mods = 0) => exports.wave_demo_live_pointer(type, x, y, mods),
+			zoom: (factor, x) => exports.wave_demo_live_zoom(factor, x),
+			setLoop: (on, start, end) => exports.wave_demo_live_set_loop(on ? 1 : 0, start, end),
+			markers: () => ({
+				start: exports.wave_demo_live_marker(0), end: exports.wave_demo_live_marker(1),
+				loopStart: exports.wave_demo_live_marker(2), loopEnd: exports.wave_demo_live_marker(3),
+			}),
+			playhead: (seconds) => exports.wave_demo_live_playhead(seconds),
+			cursor: (x, y, mods = 0) => exports.wave_demo_live_cursor(x, y, mods),
+			render: () => parse(exports.wave_demo_live_render()),
+		},
 		curveEditor: {
 			runCase: (scenariosText, index) =>
 				withString(scenariosText, (pointer) => parse(exports.curve_demo_run_case(pointer, index))),

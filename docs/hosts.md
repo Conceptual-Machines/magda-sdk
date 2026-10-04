@@ -77,9 +77,10 @@ the reference module in this repo's CI.
 list, palette, fontFamily)` draws a parsed display list, with `palette` mapping role names to ARGB
 numbers (`defaultPalette` for the rest).
 
-Under Emscripten the top-level build adds `magda_sdk_ui_demo.wasm`: the meter and the curve
-editor behind a few C exports (`hosts/canvas/ui_demo.cpp`), importing `env.measure_text` for the
-editor's tooltip. `node hosts/canvas/check.mjs --wasm <it>` runs every golden through it.
-`hosts/canvas/demo/`, served from the repo root, has a page per core: the golden cases and a live
-meter or editor. With `?autocheck` a page also probes pixels (and the editor page drives a drag
-and its undo through the live shell) and reports in `#result`.
+Under Emscripten the top-level build adds `magda_sdk_ui_demo.wasm`: the meter, the curve editor
+and the waveform view behind a few C exports (`hosts/canvas/ui_demo.cpp`), importing
+`env.measure_text` for the editor's tooltip. `node hosts/canvas/check.mjs --wasm <it>` runs
+every golden through it. `hosts/canvas/demo/`, served from the repo root, has a page per core:
+the golden cases and a live meter, editor or waveform pane. With `?autocheck` a page also probes
+pixels (and the editor page drives a drag and its undo through the live shell) and reports in
+`#result`.

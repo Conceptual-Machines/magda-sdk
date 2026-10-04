@@ -1,10 +1,11 @@
-// The SDK's UI cores (meter, curve editor) as a wasm reactor, for the Canvas 2D demos and their
-// node check.
+// The SDK's UI cores (meter, curve editor, waveform view) as a wasm reactor, for the Canvas 2D
+// demos and their node check.
 
 #include <cstdint>
 #include <string>
 #include <support/CurveEditorScenario.hpp>
 #include <support/MeterScenario.hpp>
+#include <support/WaveformScenario.hpp>
 
 #include "magda/sdk/curve/Curve.hpp"
 #include "magda/sdk/curveedit/CurveEditor.hpp"
@@ -12,6 +13,7 @@
 #include "magda/sdk/meter/MeterModel.hpp"
 #include "magda/sdk/meter/MeterPainter.hpp"
 #include "magda/sdk/state/detail/Json.hpp"
+#include "magda/sdk/waveview/WaveformView.hpp"
 
 /// The page measures tooltip text with Canvas measureText.
 extern "C" __attribute__((import_module("env"), import_name("measure_text"))) float measure_text(
@@ -25,6 +27,15 @@ std::string result;
 sdk::MeterModel meter;
 sdk::CurveEditor editor;
 std::vector<sdk::CurvePointData> lastBefore;
+
+struct LiveWave {
+    std::vector<float> samples;
+    double sampleRate = 0.0;
+    std::unique_ptr<sdk::PeakData> peaks;
+    std::unique_ptr<sdk::PeakDataWaveformSource> source;
+    sdk::WaveformView view;
+};
+LiveWave wave;
 
 const char* publish(const sdk::display::DisplayList& list) {
     result = sdk::display::toJson(list);
@@ -191,5 +202,88 @@ int curve_demo_live_set_points(const char* curveJson) {
         return 0;
     editor.refreshPoints(std::get<0>(read.curve->points));
     return 1;
+}
+
+// Waveform view
+
+/// Runs case @p index of a waveform view scenarios document; null when there is no such case.
+const char* wave_demo_run_case(const char* scenariosJson, int index) {
+    const auto root = parse(scenariosJson);
+    const auto* cases = root ? root->member("cases") : nullptr;
+    if (cases == nullptr || index < 0 || index >= static_cast<int>(cases->array.size()))
+        return nullptr;
+    return publish(sdk::waveform_scenario::run(cases->array[static_cast<std::size_t>(index)]));
+}
+
+/// Copies one channel of samples and reads it through PeakData; markers span the whole source.
+void wave_demo_live_load(const float* samples, int count, double sampleRate) {
+    wave.samples.assign(samples, samples + std::max(0, count));
+    wave.sampleRate = sampleRate;
+    const auto numSamples = static_cast<std::int64_t>(wave.samples.size());
+    wave.peaks = std::make_unique<sdk::PeakData>(1, numSamples);
+    const float* channels[] = {wave.samples.data()};
+    wave.peaks->addBlock(magda::ConstBufferView(channels, 1, static_cast<int>(numSamples)), 0);
+    wave.source = std::make_unique<sdk::PeakDataWaveformSource>(*wave.peaks, 0);
+    const double seconds = sampleRate > 0.0 ? static_cast<double>(numSamples) / sampleRate : 0.0;
+    wave.view.setSource(wave.source.get(), seconds);
+    sdk::WaveformMarkers markers;
+    markers.end = seconds;
+    wave.view.setMarkers(markers);
+}
+
+void wave_demo_live_resize(int width, int height) {
+    wave.view.setSize(width, height);
+}
+
+/// @p type: 0 down, 1 drag, 2 up. @p mods: 1 shift, 2 command, 4 alt, 8 middle button.
+/// Returns 1 repaint | 2 markers changed.
+int wave_demo_live_pointer(int type, float x, float y, int mods) {
+    sdk::WaveformPointer pointer{
+        x, y, (mods & 1) != 0, (mods & 2) != 0, (mods & 4) != 0, (mods & 8) != 0};
+    const auto r = type == 0   ? wave.view.pointerDown(pointer)
+                   : type == 1 ? wave.view.pointerDrag(pointer)
+                               : wave.view.pointerUp(pointer);
+    return (r.repaint ? 1 : 0) | (r.markersChanged ? 2 : 0);
+}
+
+int wave_demo_live_zoom(double factor, float x) {
+    return wave.view.zoomBy(factor, x).repaint ? 1 : 0;
+}
+
+void wave_demo_live_set_loop(int on, double start, double end) {
+    auto markers = wave.view.markers();
+    markers.loop = on != 0;
+    markers.loopStart = start;
+    markers.loopEnd = end;
+    wave.view.setMarkers(markers);
+}
+
+double wave_demo_live_marker(int which) {
+    const auto& m = wave.view.markers();
+    switch (which) {
+        case 0:
+            return m.start;
+        case 1:
+            return m.end;
+        case 2:
+            return m.loopStart;
+        default:
+            return m.loopEnd;
+    }
+}
+
+void wave_demo_live_playhead(double seconds) {
+    wave.view.setPlayhead(seconds);
+}
+
+int wave_demo_live_cursor(float x, float y, int mods) {
+    sdk::WaveformPointer pointer{x, y, (mods & 1) != 0, (mods & 2) != 0, (mods & 4) != 0, false};
+    return static_cast<int>(wave.view.cursor(pointer));
+}
+
+const char* wave_demo_live_render() {
+    sdk::display::DisplayList list;
+    wave.view.render(list);
+    return publish(list);
 }
 }

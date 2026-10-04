@@ -59,7 +59,8 @@ add_library(magda_sdk_core STATIC
     core/magda/sdk/state/StateCodec.cpp
     core/magda/sdk/state/StateNode.cpp
     core/magda/sdk/state/detail/Json.cpp
-    core/magda/sdk/state/detail/NumberText.cpp)
+    core/magda/sdk/state/detail/NumberText.cpp
+    core/magda/sdk/waveview/WaveformView.cpp)
 add_library(magda::sdk_core ALIAS magda_sdk_core)
 target_include_directories(magda_sdk_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core>
@@ -97,7 +98,10 @@ if(EMSCRIPTEN AND PROJECT_IS_TOP_LEVEL)
         _curve_demo_live_configure _curve_demo_live_resize _curve_demo_live_pointer
         _curve_demo_live_key _curve_demo_live_indicator _curve_demo_live_cursor
         _curve_demo_live_render _curve_demo_live_points _curve_demo_live_before
-        _curve_demo_live_set_points _malloc _free)
+        _curve_demo_live_set_points _wave_demo_run_case _wave_demo_live_load
+        _wave_demo_live_resize _wave_demo_live_pointer _wave_demo_live_zoom
+        _wave_demo_live_set_loop _wave_demo_live_marker _wave_demo_live_playhead
+        _wave_demo_live_cursor _wave_demo_live_render _malloc _free)
     list(JOIN _ui_demo_exports "," _ui_demo_export_list)
     add_executable(magda_sdk_ui_demo hosts/canvas/ui_demo.cpp)
     target_link_libraries(magda_sdk_ui_demo PRIVATE magda::sdk_core)

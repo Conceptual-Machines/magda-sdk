@@ -51,6 +51,11 @@ multiplied).
 | `tooltipText` | `FFF0F0F0` | Value tooltip text. |
 | `guide` | `FF3A3A3A` | Frames and guides. |
 | `shade` | `FF000000` | Shading over an inactive region, at low alpha. |
+| `waveform` | `FF5B9BD5` | A waveform's fill and outline. |
+| `loopRegion` | `FF4CAF50` | A loop region and its markers. |
+| `markerStart` | `FFFF9800` | A start marker. |
+| `markerEnd` | `FFF44336` | An end marker. |
+| `playhead` | `FFFFFFFF` | The play position. |
 
 The reference palette is `defaultColour()` in C++ and `defaultPalette` in JS; a shell maps
 whichever roles its theme has and leaves the rest to the reference. The roles are deliberately

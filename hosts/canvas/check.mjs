@@ -1,4 +1,4 @@
-// Runs the meter and curve editor golden scenarios through the wasm build in node and compares
+// Runs the meter, curve editor and waveform view golden scenarios through the wasm build in node and compares
 // each frame with the native golden (tests/golden), and the JS palette with the C++ one.
 //
 // node check.mjs --wasm <magda_sdk_ui_demo.wasm> [--tolerance 1.5e-3]
@@ -24,7 +24,9 @@ const goldenRoot = join(dirname(fileURLToPath(import.meta.url)), '../../tests/go
 const demo = await loadUiDemo(readFileSync(args.wasm));
 
 let failures = 0;
-for (const [suite, core] of [['meter', demo.meter], ['curve-editor', demo.curveEditor]]) {
+for (const [suite, core] of [
+	['meter', demo.meter], ['curve-editor', demo.curveEditor], ['waveform-view', demo.waveform],
+]) {
 	const dir = join(goldenRoot, suite);
 	const scenariosText = readFileSync(join(dir, 'scenarios.json'), 'utf8');
 	JSON.parse(scenariosText).cases.forEach((c, index) => {

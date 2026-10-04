@@ -6,6 +6,7 @@ export const colourRoles = [
 	'accent', 'meterLow', 'meterMid', 'meterHigh', 'meterClip',
 	'textBright', 'curve', 'curvePoint', 'handle', 'handleStroke',
 	'tooltip', 'tooltipText', 'guide', 'shade',
+	'waveform', 'loopRegion', 'markerStart', 'markerEnd', 'playhead',
 ];
 
 export const defaultPalette = {
@@ -28,6 +29,11 @@ export const defaultPalette = {
 	tooltipText: 0xFFF0F0F0,
 	guide: 0xFF3A3A3A,
 	shade: 0xFF000000,
+	waveform: 0xFF5B9BD5,
+	loopRegion: 0xFF4CAF50,
+	markerStart: 0xFFFF9800,
+	markerEnd: 0xFFF44336,
+	playhead: 0xFFFFFFFF,
 };
 
 // juce::Colour::brighter, truncating as its uint8 cast does.

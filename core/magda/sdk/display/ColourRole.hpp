@@ -27,9 +27,14 @@ enum class ColourRole : std::uint8_t {
     TooltipText,
     Guide,
     Shade,
+    Waveform,
+    LoopRegion,
+    MarkerStart,
+    MarkerEnd,
+    Playhead,
 };
 
-inline constexpr int kNumColourRoles = static_cast<int>(ColourRole::Shade) + 1;
+inline constexpr int kNumColourRoles = static_cast<int>(ColourRole::Playhead) + 1;
 
 /// The wire name, as docs/display-list.md lists it.
 std::string_view colourRoleName(ColourRole role);

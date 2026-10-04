@@ -11,13 +11,15 @@ namespace magda::sdk::display {
 
 namespace {
 
-constexpr std::array<std::string_view, kNumColourRoles> kRoleNames{
-    "background",   "surface",   "border",      "text",       "textDim", "accent",     "meterLow",
-    "meterMid",     "meterHigh", "meterClip",   "textBright", "curve",   "curvePoint", "handle",
-    "handleStroke", "tooltip",   "tooltipText", "guide",      "shade",
-};
+constexpr auto kRoleNames = std::to_array<std::string_view>({
+    "background", "surface",  "border",       "text",        "textDim",     "accent",
+    "meterLow",   "meterMid", "meterHigh",    "meterClip",   "textBright",  "curve",
+    "curvePoint", "handle",   "handleStroke", "tooltip",     "tooltipText", "guide",
+    "shade",      "waveform", "loopRegion",   "markerStart", "markerEnd",   "playhead",
+});
+static_assert(kRoleNames.size() == kNumColourRoles);
 
-constexpr std::array<std::uint32_t, kNumColourRoles> kDefaultPalette{
+constexpr auto kDefaultPalette = std::to_array<std::uint32_t>({
     0xFF1E1E1E,  // background
     0xFF2A2A2A,  // surface
     0xFF444444,  // border
@@ -37,7 +39,13 @@ constexpr std::array<std::uint32_t, kNumColourRoles> kDefaultPalette{
     0xFFF0F0F0,  // tooltipText
     0xFF3A3A3A,  // guide
     0xFF000000,  // shade
-};
+    0xFF5B9BD5,  // waveform
+    0xFF4CAF50,  // loopRegion
+    0xFFFF9800,  // markerStart
+    0xFFF44336,  // markerEnd
+    0xFFFFFFFF,  // playhead
+});
+static_assert(kDefaultPalette.size() == kNumColourRoles);
 
 std::pair<char, int> verbText(Path::Verb verb) {
     switch (verb) {
