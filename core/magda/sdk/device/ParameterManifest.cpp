@@ -100,6 +100,13 @@ class Writer {
         return ok_;
     }
 
+    bool writeParameter(const ParameterDescriptor& p, std::string& out) {
+        if (!validateParameter(p))
+            return false;
+        parameter(out, p);
+        return ok_;
+    }
+
   private:
     bool fail(const std::string& message) {
         if (error_.empty())
@@ -649,6 +656,14 @@ DeviceManifest buildManifest(const Device& device) {
 std::optional<std::string> writeManifest(const DeviceManifest& manifest, std::string& error) {
     std::string out;
     if (!Writer(error).write(manifest, out))
+        return std::nullopt;
+    return out;
+}
+
+std::optional<std::string> writeManifestParameter(const ParameterDescriptor& parameter,
+                                                  std::string& error) {
+    std::string out;
+    if (!Writer(error).writeParameter(parameter, out))
         return std::nullopt;
     return out;
 }

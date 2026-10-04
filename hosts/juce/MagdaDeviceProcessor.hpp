@@ -2,7 +2,9 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
-#include "magda/sdk/abi/magda_device.h"
+#include <memory>
+
+#include "magda/sdk/abi/AbiDevice.hpp"
 
 namespace magda::sdk::juce_host {
 
@@ -25,7 +27,7 @@ class MagdaDeviceProcessor : public juce::AudioProcessor {
 
     /// False when the module has no such device; the processor then outputs silence.
     bool hasDevice() const {
-        return device_ != nullptr;
+        return device_ != nullptr && *device_;
     }
 
     const juce::String getName() const override;
@@ -69,7 +71,7 @@ class MagdaDeviceProcessor : public juce::AudioProcessor {
 
     juce::String deviceType_;
     Layout layout_;
-    magda_device* device_ = nullptr;
+    std::unique_ptr<host::AbiDevice> device_;
     std::vector<Parameter*> parameters_;
     std::vector<float> applied_;
 

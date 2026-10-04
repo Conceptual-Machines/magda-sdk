@@ -91,6 +91,11 @@ if(MAGDA_SDK_BUILD_REFERENCE_MODULE)
     magda_sdk_add_device_module(sdk_reference SOURCES tests/abi/ReferenceDevices.cpp)
 endif()
 
+option(MAGDA_SDK_BUILD_EXAMPLES "Build the example device modules" ${PROJECT_IS_TOP_LEVEL})
+if(MAGDA_SDK_BUILD_EXAMPLES)
+    magda_sdk_add_device_module(example_gain SOURCES examples/gain/ExampleGain.cpp)
+endif()
+
 # The UI cores as a wasm reactor for the Canvas 2D demos (docs/hosts.md).
 if(EMSCRIPTEN AND PROJECT_IS_TOP_LEVEL)
     set(_ui_demo_exports
