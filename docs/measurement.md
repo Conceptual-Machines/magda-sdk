@@ -29,3 +29,25 @@ without holding it. A trigger's rewind is clamped to the start of its block; the
 of the result.
 
 `BlockPeak.hpp`: `peakMagnitude`, the highest absolute sample, ignoring NaN.
+
+## LogMelFrontEnd
+
+`LogMel.hpp`: the log-mel spectrogram audio models take. A Hann-windowed STFT with frames
+centred as librosa's `center=True` does (the signal is padded by half a frame at each end, so
+`numSamples / hopSize + 1` frames), the bins through a bank of triangular mel filters, then a log.
+Output is frame-major, `numFrames x numMels`.
+
+`LogMelConfig` names everything a model's preprocessing fixes:
+
+| Field | Choices |
+|---|---|
+| `scale` | `Htk` (`2595 log10(1 + f / 700)`) or `Slaney` (linear below 1 kHz, logarithmic above). |
+| `spectrum` | `Power` (`re^2 + im^2`) or `Magnitude`. |
+| `binScale` | Multiplies each bin, e.g. `1 / sqrt(fftSize)`. |
+| `normaliseWindow` | Scale the Hann window to a mean of one. |
+| `padding` | `Zero` or `Reflect`. Reflection needs more than `fftSize` samples. |
+| `compression` | `Log`: `log(x + logOffset)`; `Log1p`: `log1p(log1pScale * max(x, logOffset))`. |
+
+The filters are unnormalised triangles between `numMels + 2` edges evenly spaced in mels from
+`fMin` to `fMax`; `melFilterbank(config)` returns them as `numMels x (fftSize / 2 + 1)`.
+`prepare` allocates; `compute` allocates only the padded copy of the input.
