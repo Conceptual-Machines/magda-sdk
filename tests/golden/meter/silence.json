@@ -1,0 +1,6 @@
+{"format":"magda.display-list","version":1,"width":12.0,"height":120.0,"commands":[
+{"op":"fillRect","rect":[0.0,0.0,12.0,120.0],"paint":{"colour":{"role":"background"}}},
+{"op":"fillRect","rect":[0.0,0.0,5.5,120.0],"radius":1.0,"paint":{"colour":{"role":"surface"}}},
+{"op":"fillRect","rect":[6.5,0.0,5.5,120.0],"radius":1.0,"paint":{"colour":{"role":"surface"}}},
+{"op":"fillRect","rect":[0.0,29.0,12.0,1.0],"paint":{"colour":{"role":"border","alpha":0.5}}}
+]}

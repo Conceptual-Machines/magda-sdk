@@ -1,0 +1,17 @@
+{
+  "name": "@conceptual-machines/magda-sdk-canvas",
+  "version": "0.1.0",
+  "description": "Canvas 2D interpreter for MAGDA SDK display lists",
+  "type": "module",
+  "main": "js/display-list.js",
+  "exports": {
+    ".": "./js/display-list.js"
+  },
+  "files": ["js/display-list.js"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Conceptual-Machines/magda-sdk.git",
+    "directory": "hosts/canvas"
+  }
+}

@@ -15,6 +15,7 @@ add_executable(magda_sdk_tests
     test_curve.cpp
     test_curve_evaluation.cpp
     test_device_interface.cpp
+    test_display_list.cpp
     test_parameter_conversion.cpp
     test_parameter_manifest.cpp
     test_state_codec.cpp
@@ -23,6 +24,8 @@ add_executable(magda_sdk_tests
     test_fft.cpp
     test_lagrange_resampler.cpp
     test_launch_tap.cpp
+    test_meter_golden.cpp
+    test_meter_model.cpp
     test_metering_buffer.cpp
     test_mod_adsr.cpp
     test_mod_follower.cpp
@@ -46,6 +49,7 @@ add_executable(magda_sdk_tests
     test_window.cpp)
 target_link_libraries(magda_sdk_tests PRIVATE magda::sdk_core Catch2::Catch2WithMain)
 target_include_directories(magda_sdk_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(magda_sdk_tests PRIVATE MAGDA_SDK_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 option(MAGDA_SDK_EXACT_PINS "Check bit-exact output pins (valid only for a Debug build on the capture machine; a Release build differs on random.free)" OFF)
 if(MAGDA_SDK_EXACT_PINS)
     target_compile_definitions(magda_sdk_tests PRIVATE MAGDA_SDK_EXACT_PINS)

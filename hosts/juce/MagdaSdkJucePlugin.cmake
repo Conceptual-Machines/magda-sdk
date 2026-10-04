@@ -24,3 +24,12 @@ function(magda_sdk_add_juce_plugin target)
         endforeach()
     endif()
 endfunction()
+
+# magda_sdk_target_juce_display(<target>)
+#
+# Compiles the juce::Graphics display list interpreter into a JUCE target and exports its header.
+
+function(magda_sdk_target_juce_display target)
+    target_sources(${target} PRIVATE "${MAGDA_SDK_DIR}/hosts/juce/DisplayListGraphics.cpp")
+    target_include_directories(${target} PUBLIC "${MAGDA_SDK_DIR}/hosts/juce")
+endfunction()

@@ -1,0 +1,10 @@
+{"format":"magda.display-list","version":1,"width":12.0,"height":120.0,"commands":[
+{"op":"fillRect","rect":[0.0,0.0,12.0,120.0],"paint":{"colour":{"role":"background"}}},
+{"op":"fillRect","rect":[0.0,0.0,5.5,120.0],"radius":1.0,"paint":{"colour":{"role":"surface"}}},
+{"op":"fillRect","rect":[0.0,75.756,5.5,44.244],"radius":1.0,"paint":{"linear":{"from":[0.0,120.0],"to":[0.0,0.0],"stops":[[0.0,{"role":"meterLow"}],[0.355,{"role":"meterLow"}],[0.415,{"role":"meterMid"}],[0.721,{"role":"meterMid"}],[0.781,{"role":"meterHigh"}],[1.0,{"role":"meterHigh"}]]}}},
+{"op":"fillRect","rect":[0.0,33.905,5.5,1.5],"paint":{"colour":{"role":"meterMid","alpha":0.9}}},
+{"op":"fillRect","rect":[6.5,0.0,5.5,120.0],"radius":1.0,"paint":{"colour":{"role":"surface"}}},
+{"op":"fillRect","rect":[6.5,83.197,5.5,36.803],"radius":1.0,"paint":{"linear":{"from":[0.0,120.0],"to":[0.0,0.0],"stops":[[0.0,{"role":"meterLow"}],[0.355,{"role":"meterLow"}],[0.415,{"role":"meterMid"}],[0.721,{"role":"meterMid"}],[0.781,{"role":"meterHigh"}],[1.0,{"role":"meterHigh"}]]}}},
+{"op":"fillRect","rect":[6.5,48.401,5.5,1.5],"paint":{"colour":{"role":"meterMid","alpha":0.9}}},
+{"op":"fillRect","rect":[0.0,29.0,12.0,1.0],"paint":{"colour":{"role":"border","alpha":0.5}}}
+]}

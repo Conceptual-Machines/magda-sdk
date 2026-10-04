@@ -1,0 +1,46 @@
+{
+  "format": "magda.meter-scenarios",
+  "version": 1,
+  "cases": [
+    {
+      "name": "silence",
+      "layout": {"width": 12, "height": 120, "orientation": "vertical"},
+      "steps": [{"advanceMs": 16.666667, "repeat": 2}]
+    },
+    {
+      "name": "vertical-attack",
+      "layout": {"width": 12, "height": 120, "orientation": "vertical"},
+      "steps": [{"levels": [0.5, 0.25]}, {"advanceMs": 16.666667, "repeat": 3}]
+    },
+    {
+      "name": "vertical-release-holds-peak",
+      "layout": {"width": 12, "height": 120, "orientation": "vertical"},
+      "steps": [
+        {"levels": [0.9, 0.6]},
+        {"advanceMs": 16.666667, "repeat": 6},
+        {"levels": [0.05, 0.05]},
+        {"advanceMs": 16.666667, "repeat": 30}
+      ]
+    },
+    {
+      "name": "vertical-peak-decays",
+      "layout": {"width": 12, "height": 120, "orientation": "vertical"},
+      "steps": [
+        {"levels": [0.9, 0.9]},
+        {"advanceMs": 16.666667},
+        {"levels": [0, 0]},
+        {"advanceMs": 33.333333, "repeat": 60}
+      ]
+    },
+    {
+      "name": "vertical-zero-db-anchor",
+      "layout": {"width": 10, "height": 100, "orientation": "vertical", "zeroDbY": 40},
+      "steps": [{"levels": [1.4, 0.3]}, {"advanceMs": 20, "repeat": 4}]
+    },
+    {
+      "name": "horizontal",
+      "layout": {"width": 120, "height": 9, "orientation": "horizontal"},
+      "steps": [{"levels": [0.7, 0.2]}, {"advanceMs": 16.666667, "repeat": 4}]
+    }
+  ]
+}
