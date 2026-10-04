@@ -13,7 +13,9 @@ own graphics API and maps the colour roles onto its theme. Interpreters:
 | `fillRect` | `rect`, `radius`, `paint` | `radius` 0 is a sharp rectangle. |
 | `strokeRect` | `rect`, `radius`, `lineWidth`, `paint` | Stroke centred on the edge. |
 | `fillPath` | `path`, `paint` | Non-zero winding. |
-| `strokePath` | `path`, `lineWidth`, `paint` | Mitred joins, butt caps. |
+| `strokePath` | `path`, `lineWidth`, `join`, `cap`, `paint` | `join` is `miter` (default), `round` or `bevel`; `cap` is `butt` (default), `round` or `square`. |
+| `fillEllipse` | `rect`, `paint` | The ellipse inscribed in `rect`. |
+| `strokeEllipse` | `rect`, `lineWidth`, `paint` | Stroke centred on that ellipse. |
 | `text` | `text`, `rect`, `fontSize`, `justification`, `colour` | One line, vertically centred, clipped to `rect`. UTF-8. |
 | `clipRect` | `rect` | Intersects the clip, snapped outward to whole units, until the matching `restore`. |
 | `save`, `restore` | | Clip state. |
@@ -23,8 +25,10 @@ A path is a list of `M x y`, `L x y`, `Q cx cy x y`, `C c1x c1y c2x c2y x y` and
 ## Paint and colour
 
 A paint is a solid colour or a linear gradient: `from`, `to` and stops sorted by position from
-0 to 1. A colour is either a role or a literal ARGB, with an optional `alpha` that replaces the
-resolved colour's own (as `juce::Colour::withAlpha` does, not multiplied).
+0 to 1. A colour is either a role or a literal ARGB. An optional `brighter` lightens it as
+`juce::Colour::brighter` does (each channel becomes `255 - (255 - c) / (1 + brighter)`,
+truncated), then an optional `alpha` replaces its alpha (as `juce::Colour::withAlpha` does, not
+multiplied).
 
 | Role | Reference ARGB | Meaning |
 |---|---|---|
@@ -38,6 +42,15 @@ resolved colour's own (as `juce::Colour::withAlpha` does, not multiplied).
 | `meterMid` | `FFAAAA55` | Level from -12 to 0 dB. |
 | `meterHigh` | `FFAA5555` | Level above 0 dB. |
 | `meterClip` | `FFFF3B3B` | A clip latch. |
+| `textBright` | `FFFFFFFF` | High-contrast marks: grid lines at low alpha, selection rings. |
+| `curve` | `FFE8A33D` | The edited curve, and marks drawn in its colour. |
+| `curvePoint` | `FFF0F0F0` | A curve's points. |
+| `handle` | `FF1E1E1E` | Fill of a draggable handle. |
+| `handleStroke` | `FF8A8A8A` | Outline of a handle at rest. |
+| `tooltip` | `E0101010` | Value tooltip background. |
+| `tooltipText` | `FFF0F0F0` | Value tooltip text. |
+| `guide` | `FF3A3A3A` | Frames and guides. |
+| `shade` | `FF000000` | Shading over an inactive region, at low alpha. |
 
 The reference palette is `defaultColour()` in C++ and `defaultPalette` in JS; a shell maps
 whichever roles its theme has and leaves the rest to the reference. The roles are deliberately

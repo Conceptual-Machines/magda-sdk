@@ -13,6 +13,8 @@ add_executable(magda_sdk_tests
     test_block_peak.cpp
     test_biquad.cpp
     test_curve.cpp
+    test_curve_editor.cpp
+    test_curve_editor_golden.cpp
     test_curve_evaluation.cpp
     test_device_interface.cpp
     test_display_list.cpp

@@ -34,7 +34,8 @@ The modulator cores (LFO, envelope, random, follower) are in `core/magda/sdk/mod
 The step sequencer cores (mono, poly, clock) are in `core/magda/sdk/sequencer/` (see `docs/sequencer.md`).
 Loudness and transient measurement are in `core/magda/sdk/analysis/` (see `docs/measurement.md`).
 UI cores draw through the display list in `core/magda/sdk/display/` (see `docs/display-list.md`);
-the level meter model is `core/magda/sdk/meter/` (see `docs/meter.md`).
+the level meter model is `core/magda/sdk/meter/` (see `docs/meter.md`) and the curve editor
+`core/magda/sdk/curveedit/` (see `docs/curve-editor.md`).
 
 The C ABI every host runs a device through is `core/magda/sdk/abi/` (see `docs/abi.md`); the
 JUCE plugin, WAM 2 and parity hosts are `hosts/` (see `docs/hosts.md`).

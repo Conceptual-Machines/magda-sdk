@@ -37,6 +37,8 @@ add_library(magda_sdk_core STATIC
     core/magda/sdk/curve/AutomationCurveSimplifier.cpp
     core/magda/sdk/curve/Curve.cpp
     core/magda/sdk/curve/ModCurve.cpp
+    core/magda/sdk/curveedit/CurveEditor.cpp
+    core/magda/sdk/curveedit/CurveEditorRender.cpp
     core/magda/sdk/device/ParameterDescriptor.cpp
     core/magda/sdk/device/ParameterManifest.cpp
     core/magda/sdk/display/DisplayList.cpp
@@ -87,15 +89,23 @@ if(MAGDA_SDK_BUILD_REFERENCE_MODULE)
     magda_sdk_add_device_module(sdk_reference SOURCES tests/abi/ReferenceDevices.cpp)
 endif()
 
-# The meter model as a wasm reactor for the Canvas 2D demo (docs/hosts.md).
+# The UI cores as a wasm reactor for the Canvas 2D demos (docs/hosts.md).
 if(EMSCRIPTEN AND PROJECT_IS_TOP_LEVEL)
-    add_executable(magda_sdk_meter_demo hosts/canvas/meter_demo.cpp)
-    target_link_libraries(magda_sdk_meter_demo PRIVATE magda::sdk_core)
-    target_include_directories(magda_sdk_meter_demo PRIVATE tests)
-    set_target_properties(magda_sdk_meter_demo PROPERTIES SUFFIX ".wasm")
-    target_link_options(magda_sdk_meter_demo PRIVATE
+    set(_ui_demo_exports
+        _meter_demo_run_case _meter_demo_live_set_levels _meter_demo_live_advance
+        _meter_demo_live_paint _ui_demo_default_colour _curve_demo_run_case
+        _curve_demo_live_configure _curve_demo_live_resize _curve_demo_live_pointer
+        _curve_demo_live_key _curve_demo_live_indicator _curve_demo_live_cursor
+        _curve_demo_live_render _curve_demo_live_points _curve_demo_live_before
+        _curve_demo_live_set_points _malloc _free)
+    list(JOIN _ui_demo_exports "," _ui_demo_export_list)
+    add_executable(magda_sdk_ui_demo hosts/canvas/ui_demo.cpp)
+    target_link_libraries(magda_sdk_ui_demo PRIVATE magda::sdk_core)
+    target_include_directories(magda_sdk_ui_demo PRIVATE tests)
+    set_target_properties(magda_sdk_ui_demo PROPERTIES SUFFIX ".wasm")
+    target_link_options(magda_sdk_ui_demo PRIVATE
         --no-entry -sSTANDALONE_WASM=1 -sALLOW_MEMORY_GROWTH=1 -sFILESYSTEM=0
-        -sEXPORTED_FUNCTIONS=_meter_demo_run_case,_meter_demo_live_set_levels,_meter_demo_live_advance,_meter_demo_live_paint,_meter_demo_default_colour,_malloc,_free)
+        -sEXPORTED_FUNCTIONS=${_ui_demo_export_list})
 endif()
 
 option(MAGDA_SDK_BUILD_TESTS "Build the SDK tests" ${PROJECT_IS_TOP_LEVEL})

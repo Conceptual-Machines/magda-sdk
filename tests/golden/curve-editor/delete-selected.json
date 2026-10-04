@@ -1,0 +1,15 @@
+{"format":"magda.display-list","version":1,"width":200.0,"height":120.0,"commands":[
+{"op":"fillRect","rect":[0.0,0.0,200.0,120.0],"paint":{"colour":{"role":"background"}}},
+{"op":"fillRect","rect":[0.0,38.0,200.0,1.0],"paint":{"colour":{"role":"textBright","alpha":0.063}}},
+{"op":"fillRect","rect":[0.0,60.0,200.0,1.0],"paint":{"colour":{"role":"textBright","alpha":0.125}}},
+{"op":"fillRect","rect":[0.0,82.0,200.0,1.0],"paint":{"colour":{"role":"textBright","alpha":0.063}}},
+{"op":"fillRect","rect":[58.0,0.0,1.0,120.0],"paint":{"colour":{"role":"textBright","alpha":0.063}}},
+{"op":"fillRect","rect":[100.0,0.0,1.0,120.0],"paint":{"colour":{"role":"textBright","alpha":0.125}}},
+{"op":"fillRect","rect":[142.0,0.0,1.0,120.0],"paint":{"colour":{"role":"textBright","alpha":0.063}}},
+{"op":"strokePath","path":[["M",100.0,16.0],["L",184.0,104.0]],"lineWidth":2.0,"join":"round","cap":"round","paint":{"colour":{"role":"curve"}}},
+{"op":"fillPath","path":[["M",100.0,16.0],["L",184.0,104.0],["L",184.0,104.0],["L",100.0,104.0],["Z"]],"paint":{"colour":{"role":"curve","alpha":0.13}}},
+{"op":"fillEllipse","rect":[97.5,13.5,5.0,5.0],"paint":{"colour":{"role":"curvePoint"}}},
+{"op":"fillEllipse","rect":[181.5,101.5,5.0,5.0],"paint":{"colour":{"role":"curvePoint"}}},
+{"op":"fillEllipse","rect":[139.25,57.25,6.5,6.5],"paint":{"colour":{"role":"handle"}}},
+{"op":"strokeEllipse","rect":[139.25,57.25,6.5,6.5],"lineWidth":1.1,"paint":{"colour":{"role":"handleStroke"}}}
+]}

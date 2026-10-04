@@ -36,14 +36,17 @@ struct Rect {
 };
 
 /**
- * @brief A theme role or a literal colour, with an optional alpha.
+ * @brief A theme role or a literal colour, optionally brightened, with an optional alpha.
  *
+ * Brightening is juce::Colour::brighter's: each channel becomes 255 - (255 - c) / (1 + amount),
+ * truncated.
  * The alpha replaces the resolved colour's own, as juce::Colour::withAlpha does.
  */
 struct Colour {
     std::optional<ColourRole> role;
     std::uint32_t argb = 0xFF000000;
     std::optional<float> alpha;
+    float brighter = 0.0f;
 
     static Colour of(ColourRole r) {
         return {r, 0xFF000000, std::nullopt};
@@ -54,6 +57,11 @@ struct Colour {
     Colour withAlpha(float a) const {
         auto copy = *this;
         copy.alpha = a;
+        return copy;
+    }
+    Colour brightened(float amount) const {
+        auto copy = *this;
+        copy.brighter = amount;
         return copy;
     }
 };
@@ -96,6 +104,8 @@ class Path {
 };
 
 enum class Justification : std::uint8_t { Left, Centre, Right };
+enum class LineJoin : std::uint8_t { Miter, Round, Bevel };
+enum class LineCap : std::uint8_t { Butt, Round, Square };
 
 struct FillRect {
     Rect rect;
@@ -119,6 +129,21 @@ struct StrokePath {
     Path path;
     float lineWidth = 1.0f;
     Paint paint;
+    LineJoin join = LineJoin::Miter;
+    LineCap cap = LineCap::Butt;
+};
+
+/// The ellipse inscribed in @c rect.
+struct FillEllipse {
+    Rect rect;
+    Paint paint;
+};
+
+/// Stroke centred on the ellipse inscribed in @c rect.
+struct StrokeEllipse {
+    Rect rect;
+    float lineWidth = 1.0f;
+    Paint paint;
 };
 
 /// One line, vertically centred in @c rect, clipped to it.
@@ -138,8 +163,8 @@ struct ClipRect {
 struct Save {};
 struct Restore {};
 
-using Command =
-    std::variant<FillRect, StrokeRect, FillPath, StrokePath, Text, ClipRect, Save, Restore>;
+using Command = std::variant<FillRect, StrokeRect, FillPath, StrokePath, FillEllipse, StrokeEllipse,
+                             Text, ClipRect, Save, Restore>;
 
 /// Commands in paint order over a surface of @c width by @c height, origin top left.
 class DisplayList {
@@ -153,7 +178,10 @@ class DisplayList {
     void fillRect(Rect rect, Paint paint, float cornerRadius = 0.0f);
     void strokeRect(Rect rect, Paint paint, float lineWidth, float cornerRadius = 0.0f);
     void fillPath(Path path, Paint paint);
-    void strokePath(Path path, Paint paint, float lineWidth);
+    void strokePath(Path path, Paint paint, float lineWidth, LineJoin join = LineJoin::Miter,
+                    LineCap cap = LineCap::Butt);
+    void fillEllipse(Rect rect, Paint paint);
+    void strokeEllipse(Rect rect, Paint paint, float lineWidth);
     void text(std::string text, Rect rect, Colour colour, float fontSize,
               Justification justification = Justification::Left);
     void clipRect(Rect rect);

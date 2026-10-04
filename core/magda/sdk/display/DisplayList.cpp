@@ -12,8 +12,9 @@ namespace magda::sdk::display {
 namespace {
 
 constexpr std::array<std::string_view, kNumColourRoles> kRoleNames{
-    "background", "surface",  "border",   "text",      "textDim",
-    "accent",     "meterLow", "meterMid", "meterHigh", "meterClip",
+    "background",   "surface",   "border",      "text",       "textDim", "accent",     "meterLow",
+    "meterMid",     "meterHigh", "meterClip",   "textBright", "curve",   "curvePoint", "handle",
+    "handleStroke", "tooltip",   "tooltipText", "guide",      "shade",
 };
 
 constexpr std::array<std::uint32_t, kNumColourRoles> kDefaultPalette{
@@ -27,6 +28,15 @@ constexpr std::array<std::uint32_t, kNumColourRoles> kDefaultPalette{
     0xFFAAAA55,  // meterMid
     0xFFAA5555,  // meterHigh
     0xFFFF3B3B,  // meterClip
+    0xFFFFFFFF,  // textBright
+    0xFFE8A33D,  // curve
+    0xFFF0F0F0,  // curvePoint
+    0xFF1E1E1E,  // handle
+    0xFF8A8A8A,  // handleStroke
+    0xE0101010,  // tooltip
+    0xFFF0F0F0,  // tooltipText
+    0xFF3A3A3A,  // guide
+    0xFF000000,  // shade
 };
 
 std::pair<char, int> verbText(Path::Verb verb) {
@@ -90,6 +100,10 @@ class Writer {
             std::snprintf(hex, sizeof(hex), "\"#%08X\"", static_cast<unsigned>(c.argb));
             out += "\"argb\":";
             out += hex;
+        }
+        if (c.brighter != 0.0f) {
+            out += ",\"brighter\":";
+            number(c.brighter);
         }
         if (c.alpha) {
             out += ",\"alpha\":";
@@ -178,6 +192,26 @@ class Writer {
     void write(const StrokePath& c) {
         out += "{\"op\":\"strokePath\",\"path\":";
         path(c.path);
+        out += ",\"lineWidth\":";
+        number(c.lineWidth);
+        if (c.join != LineJoin::Miter)
+            out += c.join == LineJoin::Round ? ",\"join\":\"round\"" : ",\"join\":\"bevel\"";
+        if (c.cap != LineCap::Butt)
+            out += c.cap == LineCap::Round ? ",\"cap\":\"round\"" : ",\"cap\":\"square\"";
+        out += ",\"paint\":";
+        paint(c.paint);
+        out += '}';
+    }
+    void write(const FillEllipse& c) {
+        out += "{\"op\":\"fillEllipse\",\"rect\":";
+        rect(c.rect);
+        out += ",\"paint\":";
+        paint(c.paint);
+        out += '}';
+    }
+    void write(const StrokeEllipse& c) {
+        out += "{\"op\":\"strokeEllipse\",\"rect\":";
+        rect(c.rect);
         out += ",\"lineWidth\":";
         number(c.lineWidth);
         out += ",\"paint\":";
@@ -284,8 +318,16 @@ void DisplayList::fillPath(Path path, Paint paint) {
     commands_.emplace_back(FillPath{std::move(path), std::move(paint)});
 }
 
-void DisplayList::strokePath(Path path, Paint paint, float lineWidth) {
-    commands_.emplace_back(StrokePath{std::move(path), lineWidth, std::move(paint)});
+void DisplayList::strokePath(Path path, Paint paint, float lineWidth, LineJoin join, LineCap cap) {
+    commands_.emplace_back(StrokePath{std::move(path), lineWidth, std::move(paint), join, cap});
+}
+
+void DisplayList::fillEllipse(Rect rect, Paint paint) {
+    commands_.emplace_back(FillEllipse{rect, std::move(paint)});
+}
+
+void DisplayList::strokeEllipse(Rect rect, Paint paint, float lineWidth) {
+    commands_.emplace_back(StrokeEllipse{rect, lineWidth, std::move(paint)});
 }
 
 void DisplayList::text(std::string text, Rect rect, Colour colour, float fontSize,
