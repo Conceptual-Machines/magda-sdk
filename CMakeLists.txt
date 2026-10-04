@@ -32,6 +32,7 @@ endif()
 
 add_library(magda_sdk_core STATIC
     core/magda/sdk/version.cpp
+    core/magda/sdk/analysis/LogMel.cpp
     core/magda/sdk/analysis/TransientDetector.cpp
     core/magda/sdk/curve/AutomationCurve.cpp
     core/magda/sdk/curve/AutomationCurveSimplifier.cpp
