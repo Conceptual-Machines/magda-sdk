@@ -33,3 +33,4 @@ jobs:
       - run: >-
           node hosts/parity/parity.mjs --wasm build-wasm/sdk_reference.wasm
           --render build/sdk_reference_render --corpus hosts/parity/reference-corpus.json
+      - run: node hosts/canvas/check.mjs --wasm build-wasm/magda_sdk_meter_demo.wasm

@@ -33,6 +33,13 @@ state document, and a generic editor. Buses follow `IS_SYNTH`: a synth has no au
 instrument AU must take MIDI, so a synth sets `NEEDS_MIDI_INPUT TRUE` even when its device
 ignores MIDI.
 
+### Display lists
+
+`hosts/juce/DisplayListGraphics` draws a display list (docs/display-list.md) into a
+`juce::Graphics`, resolving each colour role through a function the shell supplies, read at
+paint time. `magda_sdk_target_juce_display(<target>)` adds it to a JUCE target. Clips snap
+outward to whole pixels.
+
 ## WAM 2
 
 `hosts/wam/js` is the npm package `@conceptual-machines/magda-sdk-wam`:
@@ -63,3 +70,14 @@ A corpus is `{"format": "magda.parity-corpus", "version": 1, "cases": [...]}`; a
 to normalized value), `state` (a device state document), `midi` (`{sample, bytes}`), and `input`
 (`silence`, `impulse` or `sine` at `inputFrequency`). `hosts/parity/reference-corpus.json` runs
 the reference module in this repo's CI.
+
+## Canvas 2D
+
+`hosts/canvas` is the npm package `@conceptual-machines/magda-sdk-canvas`: `drawDisplayList(ctx,
+list, palette)` draws a parsed display list, with `palette` mapping role names to ARGB numbers
+(`defaultPalette` for the rest).
+
+Under Emscripten the top-level build adds `magda_sdk_meter_demo.wasm`, the meter model and
+painter behind a few C exports. `node hosts/canvas/check.mjs --wasm <it>` runs the meter goldens
+through it. `hosts/canvas/demo/index.html`, served from the repo root, draws the golden cases and
+a live meter; with `?autocheck` it also probes pixels and reports in `#result`.

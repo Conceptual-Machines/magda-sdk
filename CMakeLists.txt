@@ -39,8 +39,11 @@ add_library(magda_sdk_core STATIC
     core/magda/sdk/curve/ModCurve.cpp
     core/magda/sdk/device/ParameterDescriptor.cpp
     core/magda/sdk/device/ParameterManifest.cpp
+    core/magda/sdk/display/DisplayList.cpp
     core/magda/sdk/dsp/Fft.cpp
     core/magda/sdk/dsp/Window.cpp
+    core/magda/sdk/meter/MeterModel.cpp
+    core/magda/sdk/meter/MeterPainter.cpp
     core/magda/sdk/mod/ModAdsr.cpp
     core/magda/sdk/mod/ModFollower.cpp
     core/magda/sdk/mod/ModLfo.cpp
@@ -82,6 +85,17 @@ include(hosts/juce/MagdaSdkJucePlugin.cmake)
 option(MAGDA_SDK_BUILD_REFERENCE_MODULE "Build the reference device module" ${PROJECT_IS_TOP_LEVEL})
 if(MAGDA_SDK_BUILD_REFERENCE_MODULE)
     magda_sdk_add_device_module(sdk_reference SOURCES tests/abi/ReferenceDevices.cpp)
+endif()
+
+# The meter model as a wasm reactor for the Canvas 2D demo (docs/hosts.md).
+if(EMSCRIPTEN AND PROJECT_IS_TOP_LEVEL)
+    add_executable(magda_sdk_meter_demo hosts/canvas/meter_demo.cpp)
+    target_link_libraries(magda_sdk_meter_demo PRIVATE magda::sdk_core)
+    target_include_directories(magda_sdk_meter_demo PRIVATE tests)
+    set_target_properties(magda_sdk_meter_demo PROPERTIES SUFFIX ".wasm")
+    target_link_options(magda_sdk_meter_demo PRIVATE
+        --no-entry -sSTANDALONE_WASM=1 -sALLOW_MEMORY_GROWTH=1 -sFILESYSTEM=0
+        -sEXPORTED_FUNCTIONS=_meter_demo_run_case,_meter_demo_live_set_levels,_meter_demo_live_advance,_meter_demo_live_paint,_meter_demo_default_colour,_malloc,_free)
 endif()
 
 option(MAGDA_SDK_BUILD_TESTS "Build the SDK tests" ${PROJECT_IS_TOP_LEVEL})
