@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAGDA SDK curve editor</title>
+<style>
+	body { background: #161616; color: #ccc; font: 13px system-ui, sans-serif; margin: 16px; }
+	.cases { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+	figure { margin: 0; }
+	figcaption { margin-top: 4px; font-size: 11px; }
+	canvas { display: block; }
+	#editor { outline: none; touch-action: none; }
+	#help { margin: 8px 0 16px; color: #999; max-width: 70ch; }
+	#result { margin-top: 16px; font-family: ui-monospace, monospace; white-space: pre; }
+</style>
+</head>
+<body>
+<!-- Serve the SDK repo root and open hosts/canvas/demo/curve-editor.html; ?wasm= overrides the
+     module path, ?autocheck runs the checks and reports in #result. -->
+<h3>Live</h3>
+<canvas id="editor" tabindex="0"></canvas>
+<div id="help">
+	Double-click to add a point, double-click a point to delete it. Drag points and the round
+	segment handles; right-click a segment for a hard corner. Shift-click stamps a step, Cmd-drag
+	draws, drag empty space to lasso, Delete removes the selection, Cmd-Z / Cmd-Shift-Z undo and
+	redo one gesture at a time, C toggles the crosshair.
+</div>
+<h3>Golden scenarios, drawn from the wasm core</h3>
+<div class="cases" id="cases"></div>
+<div id="result">running</div>
+<script type="module">
+import { drawDisplayList } from '../js/display-list.js';
+import { firstDifference, loadUiDemo, modifierBits, pointerType, responseBits } from '../js/ui-demo-wasm.js';
+
+const params = new URLSearchParams(location.search);
+const wasmUrl = params.get('wasm') ?? '../../../build-wasm/magda_sdk_ui_demo.wasm';
+const goldenUrl = '../../../tests/golden/curve-editor/';
+const fontFamily = 'system-ui, sans-serif';
+
+const measureContext = document.createElement('canvas').getContext('2d');
+const measureText = (text, size) => {
+	measureContext.font = `${size}px ${fontFamily}`;
+	return Math.trunc(measureContext.measureText(text).width);
+};
+
+const fetchText = async (url) => {
+	const response = await fetch(url);
+	if (!response.ok) throw new Error(`${url}: ${response.status}`);
+	return response.text();
+};
+
+const draw = (canvas, list) => {
+	const scale = window.devicePixelRatio || 1;
+	if (canvas.width !== list.width * scale || canvas.height !== list.height * scale) {
+		canvas.width = list.width * scale;
+		canvas.height = list.height * scale;
+		canvas.style.width = `${list.width}px`;
+		canvas.style.height = `${list.height}px`;
+	}
+	const ctx = canvas.getContext('2d');
+	ctx.setTransform(scale, 0, 0, scale, 0, 0);
+	ctx.clearRect(0, 0, list.width, list.height);
+	drawDisplayList(ctx, list, undefined, fontFamily);
+	return ctx;
+};
+
+const report = [];
+let failures = 0;
+const fail = (message) => { failures++; report.push(`FAIL ${message}`); };
+
+try {
+	const demo = await loadUiDemo(await (await fetch(wasmUrl)).arrayBuffer(), measureText);
+	const core = demo.curveEditor;
+
+	const scenariosText = await fetchText(`${goldenUrl}scenarios.json`);
+	const scenarios = JSON.parse(scenariosText);
+	for (const [index, c] of scenarios.cases.entries()) {
+		const list = core.runCase(scenariosText, index);
+		const golden = JSON.parse(await fetchText(`${goldenUrl}${c.name}.json`));
+		const difference = firstDifference(list, golden, 1.5e-3);
+		if (difference) fail(`${c.name}: ${difference}`);
+		else report.push(`ok   ${c.name}`);
+		const figure = document.createElement('figure');
+		const canvas = document.createElement('canvas');
+		draw(canvas, list);
+		const caption = document.createElement('figcaption');
+		caption.textContent = c.name;
+		figure.append(canvas, caption);
+		document.getElementById('cases').append(figure);
+	}
+
+	// The live editor: one core instance, a shell of pointer and key events and an undo stack.
+	const canvas = document.getElementById('editor');
+	core.configure({
+		size: [480, 240], padding: 8, grid: [8, 4], border: true,
+		points: [
+			{ phase: 0, value: 0 }, { phase: 0.25, value: 1, tension: 0.6 },
+			{ phase: 0.5, value: 0.3 }, { phase: 1, value: 0 },
+		],
+	});
+	const undo = [];
+	const redo = [];
+	const repaint = () => draw(canvas, core.render());
+	const modsOf = (e) => (e.shiftKey ? modifierBits.shift : 0) | (e.metaKey || e.ctrlKey ? modifierBits.command : 0)
+		| (e.altKey ? modifierBits.alt : 0) | (e.button === 2 ? modifierBits.popup : 0);
+	const cursors = ['default', 'pointer', 'copy', 'grab'];
+	const handle = (flags) => {
+		if (flags & responseBits.commit) {
+			undo.push(core.before());
+			redo.length = 0;
+		}
+		if (flags) repaint();
+		return flags;
+	};
+	const send = (type, e, mods = modsOf(e)) => {
+		const r = canvas.getBoundingClientRect();
+		return handle(core.pointer(type, e.clientX - r.left, e.clientY - r.top, mods));
+	};
+	let buttonMods = 0;
+	canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+	canvas.addEventListener('pointerdown', (e) => {
+		canvas.focus();
+		canvas.setPointerCapture(e.pointerId);
+		buttonMods = modsOf(e);
+		send(pointerType.down, e, buttonMods);
+	});
+	canvas.addEventListener('pointermove', (e) => {
+		if (e.buttons) send(pointerType.drag, e, buttonMods);
+		else send(pointerType.move, e);
+		canvas.style.cursor = cursors[core.cursor(modsOf(e))];
+	});
+	canvas.addEventListener('pointerup', (e) => send(pointerType.up, e, buttonMods));
+	canvas.addEventListener('pointerleave', (e) => send(pointerType.exit, e));
+	canvas.addEventListener('dblclick', (e) => send(pointerType.double, e, modsOf(e)));
+	canvas.addEventListener('keydown', (e) => {
+		const command = e.metaKey || e.ctrlKey;
+		if (command && e.key.toLowerCase() === 'z') {
+			const [from, to] = e.shiftKey ? [redo, undo] : [undo, redo];
+			if (from.length) {
+				to.push(core.points());
+				core.setPoints(from.pop());
+				repaint();
+			}
+			e.preventDefault();
+			return;
+		}
+		const code = e.key === 'Delete' ? 1 : e.key === 'Backspace' ? 2 : 0;
+		const character = e.key.length === 1 ? e.key.toLowerCase().codePointAt(0) : 0;
+		if (handle(core.key(code, character, modsOf(e))) & responseBits.handled) e.preventDefault();
+	});
+	const tick = (now) => {
+		const phase = (now / 2000) % 1;
+		core.indicator(phase, 0.5 + 0.5 * Math.sin(phase * 2 * Math.PI), false);
+		repaint();
+		if (!params.has('autocheck')) requestAnimationFrame(tick);
+	};
+	requestAnimationFrame(tick);
+
+	if (params.has('autocheck')) {
+		// One scripted gesture through the live shell: drag the second point down, then undo it.
+		const before = JSON.parse(core.points()).points[1];
+		const at = (x, y) => ({ clientX: canvas.getBoundingClientRect().left + x, clientY: canvas.getBoundingClientRect().top + y, button: 0 });
+		const pointX = 16 + 0.25 * 448;
+		const pointY = 16;
+		send(pointerType.down, at(pointX, pointY), 0);
+		send(pointerType.drag, at(pointX + 56, pointY + 52), 0);
+		const flags = send(pointerType.up, at(pointX + 56, pointY + 52), 0);
+		const after = JSON.parse(core.points()).points[1];
+		if (!(flags & responseBits.commit)) fail('live drag did not commit');
+		else if (Math.abs(after.x - 0.375) > 1e-6 || Math.abs(after.y - 0.75) > 1e-6)
+			fail(`live drag landed at ${after.x}, ${after.y}`);
+		else report.push('ok   live drag');
+		if (undo.length !== 1) fail(`live drag left ${undo.length} undo steps`);
+		core.setPoints(undo.pop());
+		const undone = JSON.parse(core.points()).points[1];
+		if (undone.x !== before.x || undone.y !== before.y) fail('undo did not restore the point');
+		else report.push('ok   undo');
+
+		// The rendered point must be on the canvas where the core says it is.
+		repaint();
+		const ctx = canvas.getContext('2d', { willReadFrequently: true });
+		const scale = window.devicePixelRatio || 1;
+		const [r, g, b] = ctx.getImageData(Math.round(pointX * scale), Math.round(pointY * scale), 1, 1).data;
+		if (Math.abs(r - 0xF0) > 8 || Math.abs(g - 0xF0) > 8 || Math.abs(b - 0xF0) > 8)
+			fail(`point pixel is ${r},${g},${b}`);
+		else report.push('ok   point pixel');
+	}
+} catch (error) {
+	fail(error.message);
+}
+document.getElementById('result').textContent =
+	`${failures === 0 ? 'PASS' : 'FAIL'}\n${report.join('\n')}`;
+</script>
+</body>
+</html>

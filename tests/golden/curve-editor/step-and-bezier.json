@@ -1,0 +1,17 @@
+{"format":"magda.display-list","version":1,"width":240.0,"height":289.0,"commands":[
+{"op":"fillRect","rect":[0.0,0.0,240.0,289.0],"paint":{"colour":{"role":"background"}}},
+{"op":"fillRect","rect":[0.0,80.0,240.0,1.0],"paint":{"colour":{"role":"textBright","alpha":0.063}}},
+{"op":"fillRect","rect":[0.0,144.0,240.0,1.0],"paint":{"colour":{"role":"textBright","alpha":0.125}}},
+{"op":"fillRect","rect":[0.0,208.0,240.0,1.0],"paint":{"colour":{"role":"textBright","alpha":0.063}}},
+{"op":"fillRect","rect":[68.0,0.0,1.0,289.0],"paint":{"colour":{"role":"textBright","alpha":0.063}}},
+{"op":"fillRect","rect":[120.0,0.0,1.0,289.0],"paint":{"colour":{"role":"textBright","alpha":0.125}}},
+{"op":"fillRect","rect":[172.0,0.0,1.0,289.0],"paint":{"colour":{"role":"textBright","alpha":0.063}}},
+{"op":"strokePath","path":[["M",16.0,221.6],["L",78.4,221.6],["L",78.4,67.4],["C",99.2,16.0,140.8,195.9,161.6,170.2],["L",192.8,144.5],["L",224.0,118.8]],"lineWidth":3.612,"join":"round","cap":"round","paint":{"colour":{"role":"curve"}}},
+{"op":"fillPath","path":[["M",16.0,221.6],["L",78.4,221.6],["L",78.4,67.4],["C",99.2,16.0,140.8,195.9,161.6,170.2],["L",192.8,144.5],["L",224.0,118.8],["L",224.0,273.0],["L",16.0,273.0],["Z"]],"paint":{"colour":{"role":"curve","alpha":0.13}}},
+{"op":"fillEllipse","rect":[11.75,216.75,8.5,8.5],"paint":{"colour":{"role":"curvePoint"}}},
+{"op":"fillEllipse","rect":[73.75,62.75,8.5,8.5],"paint":{"colour":{"role":"curvePoint"}}},
+{"op":"fillRect","rect":[156.75,165.75,8.5,8.5],"paint":{"colour":{"role":"curvePoint"}}},
+{"op":"fillEllipse","rect":[219.75,113.75,8.5,8.5],"paint":{"colour":{"role":"curvePoint"}}},
+{"op":"fillRect","rect":[189.25,141.25,6.5,6.5],"radius":0.5,"paint":{"colour":{"role":"handle"}}},
+{"op":"strokeRect","rect":[189.25,141.25,6.5,6.5],"radius":0.5,"lineWidth":1.1,"paint":{"colour":{"role":"handleStroke"}}}
+]}

@@ -2,28 +2,29 @@
 #include <cstdlib>
 #include <fstream>
 #include <support/GoldenJson.hpp>
-#include <support/MeterScenario.hpp>
+#include <support/WaveformScenario.hpp>
 
 namespace detail = magda::sdk::detail;
 namespace display = magda::sdk::display;
 namespace golden = magda::sdk::golden_json;
-namespace scenario = magda::sdk::meter_scenario;
+namespace scenario = magda::sdk::waveform_scenario;
 
-TEST_CASE("Meter frames match their golden display lists", "[meter][golden]") {
-    const std::string dir = std::string(MAGDA_SDK_TESTS_DIR) + "/golden/meter/";
+TEST_CASE("Waveform view frames match their golden display lists", "[waveview][golden]") {
+    const std::string dir = std::string(MAGDA_SDK_TESTS_DIR) + "/golden/waveform-view/";
     std::string error;
     const auto scenarios = detail::parseJson(golden::readFile(dir + "scenarios.json"), error);
     REQUIRE(scenarios.has_value());
-    const auto cases = scenario::casesOf(*scenarios);
-    REQUIRE(cases.size() >= 6);
+    const auto* cases = scenarios->member("cases");
+    REQUIRE(cases != nullptr);
+    REQUIRE(cases->array.size() >= 11);
 
     const bool update = std::getenv("MAGDA_SDK_UPDATE_GOLDENS") != nullptr;
 
-    for (const auto& c : cases) {
-        DYNAMIC_SECTION(c.name) {
-            magda::sdk::MeterModel meter;
-            const auto json = display::toJson(scenario::run(c, meter), {.decimals = 3});
-            const auto goldenPath = dir + c.name + ".json";
+    for (const auto& c : cases->array) {
+        const auto name = c.member("name")->string;
+        DYNAMIC_SECTION(name) {
+            const auto json = display::toJson(scenario::run(c), {.decimals = 3});
+            const auto goldenPath = dir + name + ".json";
 
             if (update) {
                 std::ofstream(goldenPath, std::ios::binary) << json;
@@ -36,7 +37,6 @@ TEST_CASE("Meter frames match their golden display lists", "[meter][golden]") {
             const auto expected = detail::parseJson(golden::readFile(goldenPath), error);
             INFO(goldenPath << ": " << error);
             REQUIRE(expected.has_value());
-            INFO(json);
             CHECK(golden::firstDifference(*actual, *expected) == "");
         }
     }

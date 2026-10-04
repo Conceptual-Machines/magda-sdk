@@ -12,7 +12,19 @@ juce::Rectangle<float> toJuce(const Rect& r) {
 
 juce::Colour resolveColour(const Colour& colour, const ColourResolver& resolve) {
     auto resolved = colour.role ? resolve(*colour.role) : juce::Colour(colour.argb);
+    if (colour.brighter != 0.0f)
+        resolved = resolved.brighter(colour.brighter);
     return colour.alpha ? resolved.withAlpha(*colour.alpha) : resolved;
+}
+
+juce::PathStrokeType strokeType(const StrokePath& c) {
+    const auto join = c.join == LineJoin::Round   ? juce::PathStrokeType::curved
+                      : c.join == LineJoin::Bevel ? juce::PathStrokeType::beveled
+                                                  : juce::PathStrokeType::mitered;
+    const auto cap = c.cap == LineCap::Round    ? juce::PathStrokeType::rounded
+                     : c.cap == LineCap::Square ? juce::PathStrokeType::square
+                                                : juce::PathStrokeType::butt;
+    return {c.lineWidth, join, cap};
 }
 
 void setPaint(juce::Graphics& g, const Paint& paint, const ColourResolver& resolve) {
@@ -74,6 +86,7 @@ juce::Justification toJuce(Justification justification) {
 struct Interpreter {
     juce::Graphics& g;
     const ColourResolver& resolve;
+    const FontResolver& font;
 
     void operator()(const FillRect& c) const {
         setPaint(g, c.paint, resolve);
@@ -95,11 +108,19 @@ struct Interpreter {
     }
     void operator()(const StrokePath& c) const {
         setPaint(g, c.paint, resolve);
-        g.strokePath(toJuce(c.path), juce::PathStrokeType(c.lineWidth));
+        g.strokePath(toJuce(c.path), strokeType(c));
+    }
+    void operator()(const FillEllipse& c) const {
+        setPaint(g, c.paint, resolve);
+        g.fillEllipse(toJuce(c.rect));
+    }
+    void operator()(const StrokeEllipse& c) const {
+        setPaint(g, c.paint, resolve);
+        g.drawEllipse(toJuce(c.rect), c.lineWidth);
     }
     void operator()(const Text& c) const {
         g.setColour(resolveColour(c.colour, resolve));
-        g.setFont(juce::FontOptions(c.fontSize));
+        g.setFont(font ? font(c.fontSize) : juce::Font(juce::FontOptions(c.fontSize)));
         g.drawText(juce::String::fromUTF8(c.text.c_str()), toJuce(c.rect), toJuce(c.justification),
                    false);
     }
@@ -121,9 +142,9 @@ juce::Colour defaultColour(display::ColourRole role) {
 }
 
 void drawDisplayList(juce::Graphics& g, const display::DisplayList& list,
-                     const ColourResolver& resolve) {
+                     const ColourResolver& resolve, const FontResolver& font) {
     juce::Graphics::ScopedSaveState state(g);
-    const Interpreter interpreter{g, resolve};
+    const Interpreter interpreter{g, resolve, font};
     for (const auto& command : list.commands())
         std::visit(interpreter, command);
 }

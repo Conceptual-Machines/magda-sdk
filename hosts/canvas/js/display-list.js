@@ -4,6 +4,9 @@
 export const colourRoles = [
 	'background', 'surface', 'border', 'text', 'textDim',
 	'accent', 'meterLow', 'meterMid', 'meterHigh', 'meterClip',
+	'textBright', 'curve', 'curvePoint', 'handle', 'handleStroke',
+	'tooltip', 'tooltipText', 'guide', 'shade',
+	'waveform', 'loopRegion', 'markerStart', 'markerEnd', 'playhead',
 ];
 
 export const defaultPalette = {
@@ -17,18 +20,42 @@ export const defaultPalette = {
 	meterMid: 0xFFAAAA55,
 	meterHigh: 0xFFAA5555,
 	meterClip: 0xFFFF3B3B,
+	textBright: 0xFFFFFFFF,
+	curve: 0xFFE8A33D,
+	curvePoint: 0xFFF0F0F0,
+	handle: 0xFF1E1E1E,
+	handleStroke: 0xFF8A8A8A,
+	tooltip: 0xE0101010,
+	tooltipText: 0xFFF0F0F0,
+	guide: 0xFF3A3A3A,
+	shade: 0xFF000000,
+	waveform: 0xFF5B9BD5,
+	loopRegion: 0xFF4CAF50,
+	markerStart: 0xFFFF9800,
+	markerEnd: 0xFFF44336,
+	playhead: 0xFFFFFFFF,
 };
 
-const css = (argb, alpha) => {
+// juce::Colour::brighter, truncating as its uint8 cast does.
+const brighten = (channel, amount) =>
+	(amount ? Math.trunc(255 - Math.fround(1 / (1 + amount)) * (255 - channel)) : channel);
+
+const css = (argb, alpha, brighter) => {
 	const a = alpha ?? ((argb >>> 24) & 0xFF) / 255;
-	return `rgba(${(argb >>> 16) & 0xFF},${(argb >>> 8) & 0xFF},${argb & 0xFF},${a})`;
+	const [r, g, b] = [(argb >>> 16) & 0xFF, (argb >>> 8) & 0xFF, argb & 0xFF].map((c) => brighten(c, brighter));
+	return `rgba(${r},${g},${b},${a})`;
 };
 
 const resolveColour = (colour, palette) => {
 	const argb = colour.role !== undefined
 		? (palette[colour.role] ?? defaultPalette[colour.role] ?? 0xFF000000)
 		: parseInt(colour.argb.slice(1), 16);
-	return css(argb, colour.alpha);
+	return css(argb, colour.alpha, colour.brighter);
+};
+
+const traceEllipse = (ctx, [x, y, w, h]) => {
+	ctx.beginPath();
+	ctx.ellipse(x + w / 2, y + h / 2, Math.max(0, w / 2), Math.max(0, h / 2), 0, 0, 2 * Math.PI);
 };
 
 const resolvePaint = (ctx, paint, palette) => {
@@ -62,12 +89,13 @@ const textAlign = { left: 'left', centre: 'center', right: 'right' };
 /**
  * Draws @p list onto @p ctx at its current transform, one display unit per CSS pixel.
  * @p palette maps role names to ARGB numbers; a missing role falls back to defaultPalette.
+ * Text draws in @p fontFamily.
  */
-export function drawDisplayList(ctx, list, palette = defaultPalette) {
+export function drawDisplayList(ctx, list, palette = defaultPalette, fontFamily = 'sans-serif') {
 	ctx.save();
-	ctx.lineJoin = 'miter';
-	ctx.lineCap = 'butt';
 	for (const command of list.commands) {
+		ctx.lineJoin = 'miter';
+		ctx.lineCap = 'butt';
 		switch (command.op) {
 			case 'fillRect':
 				ctx.fillStyle = resolvePaint(ctx, command.paint, palette);
@@ -88,7 +116,20 @@ export function drawDisplayList(ctx, list, palette = defaultPalette) {
 			case 'strokePath':
 				ctx.strokeStyle = resolvePaint(ctx, command.paint, palette);
 				ctx.lineWidth = command.lineWidth;
+				ctx.lineJoin = command.join ?? 'miter';
+				ctx.lineCap = command.cap ?? 'butt';
 				tracePath(ctx, command.path);
+				ctx.stroke();
+				break;
+			case 'fillEllipse':
+				ctx.fillStyle = resolvePaint(ctx, command.paint, palette);
+				traceEllipse(ctx, command.rect);
+				ctx.fill();
+				break;
+			case 'strokeEllipse':
+				ctx.strokeStyle = resolvePaint(ctx, command.paint, palette);
+				ctx.lineWidth = command.lineWidth;
+				traceEllipse(ctx, command.rect);
 				ctx.stroke();
 				break;
 			case 'text': {
@@ -98,7 +139,7 @@ export function drawDisplayList(ctx, list, palette = defaultPalette) {
 				ctx.rect(x, y, w, h);
 				ctx.clip();
 				ctx.fillStyle = resolveColour(command.colour, palette);
-				ctx.font = `${command.fontSize}px sans-serif`;
+				ctx.font = `${command.fontSize}px ${fontFamily}`;
 				ctx.textBaseline = 'middle';
 				ctx.textAlign = textAlign[command.justification] ?? 'left';
 				const anchorX = command.justification === 'right' ? x + w

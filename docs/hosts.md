@@ -37,7 +37,7 @@ ignores MIDI.
 
 `hosts/juce/DisplayListGraphics` draws a display list (docs/display-list.md) into a
 `juce::Graphics`, resolving each colour role through a function the shell supplies, read at
-paint time. `magda_sdk_target_juce_display(<target>)` adds it to a JUCE target. Clips snap
+paint time, and text through an optional font function. `magda_sdk_target_juce_display(<target>)` adds it to a JUCE target. Clips snap
 outward to whole pixels.
 
 ## WAM 2
@@ -74,10 +74,13 @@ the reference module in this repo's CI.
 ## Canvas 2D
 
 `hosts/canvas` is the npm package `@conceptual-machines/magda-sdk-canvas`: `drawDisplayList(ctx,
-list, palette)` draws a parsed display list, with `palette` mapping role names to ARGB numbers
-(`defaultPalette` for the rest).
+list, palette, fontFamily)` draws a parsed display list, with `palette` mapping role names to ARGB
+numbers (`defaultPalette` for the rest).
 
-Under Emscripten the top-level build adds `magda_sdk_meter_demo.wasm`, the meter model and
-painter behind a few C exports. `node hosts/canvas/check.mjs --wasm <it>` runs the meter goldens
-through it. `hosts/canvas/demo/index.html`, served from the repo root, draws the golden cases and
-a live meter; with `?autocheck` it also probes pixels and reports in `#result`.
+Under Emscripten the top-level build adds `magda_sdk_ui_demo.wasm`: the meter, the curve editor
+and the waveform view behind a few C exports (`hosts/canvas/ui_demo.cpp`), importing
+`env.measure_text` for the editor's tooltip. `node hosts/canvas/check.mjs --wasm <it>` runs
+every golden through it. `hosts/canvas/demo/`, served from the repo root, has a page per core:
+the golden cases and a live meter, editor or waveform pane. With `?autocheck` a page also probes
+pixels (and the editor page drives a drag and its undo through the live shell) and reports in
+`#result`.

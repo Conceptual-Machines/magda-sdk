@@ -13,6 +13,8 @@ add_executable(magda_sdk_tests
     test_block_peak.cpp
     test_biquad.cpp
     test_curve.cpp
+    test_curve_editor.cpp
+    test_curve_editor_golden.cpp
     test_curve_evaluation.cpp
     test_device_interface.cpp
     test_display_list.cpp
@@ -46,6 +48,8 @@ add_executable(magda_sdk_tests
     test_track_measurer.cpp
     test_transient_detector.cpp
     test_value_tap.cpp
+    test_waveform_view.cpp
+    test_waveform_view_golden.cpp
     test_window.cpp)
 target_link_libraries(magda_sdk_tests PRIVATE magda::sdk_core Catch2::Catch2WithMain)
 target_include_directories(magda_sdk_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

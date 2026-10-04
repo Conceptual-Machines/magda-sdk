@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAGDA SDK waveform view</title>
+<style>
+	body { background: #161616; color: #ccc; font: 13px system-ui, sans-serif; margin: 16px; }
+	.cases { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+	figure { margin: 0; }
+	figcaption { margin-top: 4px; font-size: 11px; }
+	canvas { display: block; background: #202020; max-width: 100%; }
+	#help { margin: 8px 0 16px; color: #999; max-width: 70ch; }
+	#result { margin-top: 16px; font-family: ui-monospace, monospace; white-space: pre; }
+	label { margin-right: 12px; }
+</style>
+</head>
+<body>
+<!-- Serve the SDK repo root and open hosts/canvas/demo/waveform.html; ?wasm= overrides the module
+     path, ?autocheck runs the checks and reports in #result. -->
+<h3>Live</h3>
+<canvas id="wave"></canvas>
+<div id="help">
+	Wheel zooms about the cursor, Cmd-drag zooms, Alt-drag scrolls. Drag the start, end and loop
+	markers or the loop bar; Shift-click places the loop start. Drop an audio file to load it (read
+	through PeakData).
+	<br><label><input type="checkbox" id="loop" checked> Loop</label> <span id="markers"></span>
+</div>
+<h3>Golden scenarios, drawn from the wasm core</h3>
+<div class="cases" id="cases"></div>
+<div id="result">running</div>
+<script type="module">
+import { drawDisplayList } from '../js/display-list.js';
+import { firstDifference, loadUiDemo } from '../js/ui-demo-wasm.js';
+
+const params = new URLSearchParams(location.search);
+const wasmUrl = params.get('wasm') ?? '../../../build-wasm/magda_sdk_ui_demo.wasm';
+const goldenUrl = '../../../tests/golden/waveform-view/';
+
+const fetchText = async (url) => {
+	const response = await fetch(url);
+	if (!response.ok) throw new Error(`${url}: ${response.status}`);
+	return response.text();
+};
+
+const draw = (canvas, list) => {
+	const scale = window.devicePixelRatio || 1;
+	if (canvas.width !== list.width * scale || canvas.height !== list.height * scale) {
+		canvas.width = list.width * scale;
+		canvas.height = list.height * scale;
+		canvas.style.width = `${list.width}px`;
+		canvas.style.height = `${list.height}px`;
+	}
+	const ctx = canvas.getContext('2d');
+	ctx.setTransform(scale, 0, 0, scale, 0, 0);
+	ctx.clearRect(0, 0, list.width, list.height);
+	drawDisplayList(ctx, list);
+};
+
+// The same burst as tests/support/WaveformScenario.hpp.
+const burst = (seconds, rate) => Float32Array.from({ length: Math.round(seconds * rate) }, (_, i) => {
+	const t = i / rate;
+	return Math.exp(-1.5 * t) * (0.2 + 0.8 * Math.abs(Math.sin(1.5 * Math.PI * t))) * Math.sin(2 * Math.PI * 110 * t);
+});
+
+const report = [];
+let failures = 0;
+const fail = (message) => { failures++; report.push(`FAIL ${message}`); };
+
+try {
+	const demo = await loadUiDemo(await (await fetch(wasmUrl)).arrayBuffer());
+	const core = demo.waveform;
+
+	const scenariosText = await fetchText(`${goldenUrl}scenarios.json`);
+	for (const [index, c] of JSON.parse(scenariosText).cases.entries()) {
+		const list = core.runCase(scenariosText, index);
+		const golden = JSON.parse(await fetchText(`${goldenUrl}${c.name}.json`));
+		const difference = firstDifference(list, golden, 1.5e-3);
+		if (difference) fail(`${c.name}: ${difference}`);
+		else report.push(`ok   ${c.name}`);
+		const figure = document.createElement('figure');
+		const canvas = document.createElement('canvas');
+		draw(canvas, list);
+		const caption = document.createElement('figcaption');
+		caption.textContent = c.name;
+		figure.append(canvas, caption);
+		document.getElementById('cases').append(figure);
+	}
+
+	const canvas = document.getElementById('wave');
+	const loopBox = document.getElementById('loop');
+	const width = Math.min(720, document.body.clientWidth);
+	core.resize(width, 160);
+	let seconds = 4;
+	const load = (samples, rate) => {
+		core.load(samples, rate);
+		seconds = samples.length / rate;
+		core.setLoop(loopBox.checked, seconds * 0.3, seconds * 0.6);
+	};
+	load(burst(4, 22050), 22050);
+
+	const repaint = () => {
+		draw(canvas, core.render());
+		const m = core.markers();
+		document.getElementById('markers').textContent =
+			`start ${m.start.toFixed(3)} s, end ${m.end.toFixed(3)} s, loop ${m.loopStart.toFixed(3)} to ${m.loopEnd.toFixed(3)} s`;
+	};
+	const local = (e) => {
+		const r = canvas.getBoundingClientRect();
+		return [e.clientX - r.left, e.clientY - r.top];
+	};
+	const modsOf = (e) => (e.shiftKey ? 1 : 0) | (e.metaKey || e.ctrlKey ? 2 : 0) | (e.altKey ? 4 : 0) | (e.button === 1 ? 8 : 0);
+	const cursors = ['default', 'ew-resize', 'grab', 'zoom-in', 'zoom-in', 'zoom-out'];
+	let buttonMods = 0;
+	canvas.addEventListener('pointerdown', (e) => {
+		canvas.setPointerCapture(e.pointerId);
+		buttonMods = modsOf(e);
+		core.pointer(0, ...local(e), buttonMods);
+		repaint();
+	});
+	canvas.addEventListener('pointermove', (e) => {
+		if (e.buttons) {
+			core.pointer(1, ...local(e), buttonMods);
+			repaint();
+		}
+		canvas.style.cursor = cursors[core.cursor(...local(e), modsOf(e))];
+	});
+	canvas.addEventListener('pointerup', (e) => core.pointer(2, ...local(e), buttonMods));
+	canvas.addEventListener('wheel', (e) => {
+		e.preventDefault();
+		core.zoom(Math.exp(-e.deltaY * 0.002), local(e)[0]);
+		repaint();
+	}, { passive: false });
+	loopBox.addEventListener('change', () => {
+		const m = core.markers();
+		core.setLoop(loopBox.checked, m.loopStart || seconds * 0.3, m.loopEnd || seconds * 0.6);
+		repaint();
+	});
+	canvas.addEventListener('dragover', (e) => e.preventDefault());
+	canvas.addEventListener('drop', async (e) => {
+		e.preventDefault();
+		const file = e.dataTransfer.files[0];
+		if (!file) return;
+		const audio = await new AudioContext().decodeAudioData(await file.arrayBuffer());
+		load(audio.getChannelData(0), audio.sampleRate);
+		repaint();
+	});
+
+	const started = performance.now();
+	const tick = (now) => {
+		const m = core.markers();
+		const span = Math.max(0.001, m.end - m.start);
+		core.playhead(m.start + (((now - started) / 1000) % span));
+		repaint();
+		if (!params.has('autocheck')) requestAnimationFrame(tick);
+	};
+	requestAnimationFrame(tick);
+
+	if (params.has('autocheck')) {
+		// Through the live shell: zoom about the middle, then drag the end marker in.
+		core.zoom(2, width / 2);
+		const before = core.markers().end;
+		const endX = width - 1;
+		core.pointer(0, endX, 80, 0);
+		core.pointer(1, endX - 100, 80, 0);
+		core.pointer(2, endX - 100, 80, 0);
+		const after = core.markers().end;
+		if (!(after < before)) fail(`end marker did not move: ${before} -> ${after}`);
+		else report.push('ok   live end-marker drag');
+		repaint();
+	}
+} catch (error) {
+	fail(error.message);
+}
+document.getElementById('result').textContent =
+	`${failures === 0 ? 'PASS' : 'FAIL'}\n${report.join('\n')}`;
+</script>
+</body>
+</html>

@@ -3,129 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MAGDA SDK meter</title>
+<title>MAGDA SDK UI cores</title>
 <style>
-	body { background: #161616; color: #ccc; font: 13px system-ui, sans-serif; margin: 16px; }
-	.cases { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; }
-	figure { margin: 0; }
-	figcaption { margin-top: 6px; font-size: 11px; }
-	canvas { image-rendering: pixelated; display: block; }
-	#result { margin-top: 16px; font-family: ui-monospace, monospace; white-space: pre; }
+	body { background: #161616; color: #ccc; font: 14px system-ui, sans-serif; margin: 16px; }
+	a { color: #8ab4f8; }
 </style>
 </head>
 <body>
-<!-- Serve the SDK repo root and open hosts/canvas/demo/; ?wasm= overrides the module path. -->
-<h3>Golden scenarios, drawn from the wasm meter model</h3>
-<div class="cases" id="cases"></div>
-<h3>Live</h3>
-<div class="cases" id="live"></div>
-<div id="result">running</div>
-<script type="module">
-import { drawDisplayList, defaultPalette } from '../js/display-list.js';
-import { firstDifference, loadMeterDemo } from '../js/meter-demo-wasm.js';
-
-const params = new URLSearchParams(location.search);
-const wasmUrl = params.get('wasm') ?? '../../../build-wasm/magda_sdk_meter_demo.wasm';
-const goldenUrl = '../../../tests/golden/meter/';
-const zoom = 4;
-
-const fetchText = async (url) => {
-	const response = await fetch(url);
-	if (!response.ok) throw new Error(`${url}: ${response.status}`);
-	return response.text();
-};
-
-// A display list at one unit per device pixel, for pixel probes.
-const rasterise = (list) => {
-	const canvas = document.createElement('canvas');
-	canvas.width = list.width;
-	canvas.height = list.height;
-	drawDisplayList(canvas.getContext('2d', { willReadFrequently: true }), list);
-	return canvas;
-};
-
-const pixel = (canvas, x, y) => Array.from(canvas.getContext('2d').getImageData(x, y, 1, 1).data);
-
-const rgb = (argb) => [(argb >>> 16) & 0xFF, (argb >>> 8) & 0xFF, argb & 0xFF, 255];
-
-const mix = (under, over, alpha) =>
-	under.map((value, i) => (i === 3 ? 255 : Math.round(value * (1 - alpha) + over[i] * alpha)));
-
-// Points whose colour follows from the scenario without reading the list back.
-const probes = {
-	'silence': [
-		[2, 60, rgb(defaultPalette.surface)],
-		[2, 29, mix(rgb(defaultPalette.surface), rgb(defaultPalette.border), 0.5)],
-	],
-	'vertical-attack': [[2, 118, rgb(defaultPalette.meterLow)], [2, 2, rgb(defaultPalette.surface)]],
-	'horizontal': [[2, 2, rgb(defaultPalette.meterLow)], [118, 2, rgb(defaultPalette.surface)]],
-};
-
-const show = (container, list, caption) => {
-	const canvas = document.createElement('canvas');
-	canvas.width = list.width * zoom;
-	canvas.height = list.height * zoom;
-	const ctx = canvas.getContext('2d');
-	ctx.scale(zoom, zoom);
-	drawDisplayList(ctx, list);
-	const figure = document.createElement('figure');
-	figure.append(canvas);
-	const label = document.createElement('figcaption');
-	label.textContent = caption;
-	figure.append(label);
-	container.append(figure);
-	return ctx;
-};
-
-const report = [];
-let failures = 0;
-try {
-	const demo = await loadMeterDemo(await (await fetch(wasmUrl)).arrayBuffer());
-	const scenariosText = await fetchText(`${goldenUrl}scenarios.json`);
-	const scenarios = JSON.parse(scenariosText);
-
-	for (const [index, c] of scenarios.cases.entries()) {
-		const list = demo.runCase(scenariosText, index);
-		const golden = JSON.parse(await fetchText(`${goldenUrl}${c.name}.json`));
-		const problems = [];
-		const difference = firstDifference(list, golden, 1.5e-3);
-		if (difference) problems.push(`golden ${difference}`);
-
-		const raster = rasterise(list);
-		for (const [x, y, expected] of probes[c.name] ?? []) {
-			const actual = pixel(raster, x, y);
-			if (actual.some((value, i) => Math.abs(value - expected[i]) > 2))
-				problems.push(`pixel ${x},${y} is ${actual} not ${expected}`);
-		}
-		failures += problems.length;
-		report.push(`${problems.length ? 'FAIL' : 'ok  '} ${c.name}${problems.length ? `: ${problems.join('; ')}` : ''}`);
-		show(document.getElementById('cases'), list, c.name);
-	}
-
-	const live = document.getElementById('live');
-	const vertical = show(live, demo.paint(12, 120), 'vertical');
-	const horizontal = show(live, demo.paint(160, 9, true), 'horizontal');
-	let last = performance.now();
-	const frame = (now) => {
-		const t = now / 1000;
-		const left = Math.abs(Math.sin(t * 1.7)) ** 3 * 1.1;
-		const right = Math.abs(Math.sin(t * 2.3 + 1)) ** 3 * 0.9;
-		demo.setLevels(left, right);
-		demo.advance(now - last);
-		last = now;
-		vertical.clearRect(0, 0, 12, 120);
-		drawDisplayList(vertical, demo.paint(12, 120));
-		horizontal.clearRect(0, 0, 160, 9);
-		drawDisplayList(horizontal, demo.paint(160, 9, true));
-		requestAnimationFrame(frame);
-	};
-	if (!params.has('autocheck')) requestAnimationFrame(frame);
-} catch (error) {
-	failures++;
-	report.push(`FAIL ${error.message}`);
-}
-document.getElementById('result').textContent =
-	`${failures === 0 ? 'PASS' : 'FAIL'}\n${report.join('\n')}`;
-</script>
+<h3>MAGDA SDK UI cores, drawn through Canvas 2D</h3>
+<ul>
+	<li><a href="meter.html">Meter</a></li>
+	<li><a href="curve-editor.html">Curve editor</a></li>
+	<li><a href="waveform.html">Waveform view</a></li>
+</ul>
 </body>
 </html>
