@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include <atomic>
 #include <memory>
 
 #include "magda/sdk/abi/AbiDevice.hpp"
@@ -11,10 +12,10 @@ namespace magda::sdk::juce_host {
 /**
  * @brief A juce::AudioProcessor over one device of the C ABI (docs/abi.md).
  *
- * Parameters come from the device's manifest; plugin state is the magda.plugin-state document the
- * WAM host also writes.
+ * Parameters are the slots a fresh instance has, described through the per-instance queries;
+ * plugin state is the magda.plugin-state document the WAM host also writes.
  */
-class MagdaDeviceProcessor : public juce::AudioProcessor {
+class MagdaDeviceProcessor : public juce::AudioProcessor, private juce::AsyncUpdater {
   public:
     struct Layout {
         bool audioInput = true;
@@ -32,7 +33,8 @@ class MagdaDeviceProcessor : public juce::AudioProcessor {
 
     const juce::String getName() const override;
     void prepareToPlay(double sampleRate, int maximumBlockSize) override;
-    void releaseResources() override {}
+    void releaseResources() override;
+    void reset() override;
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
 
@@ -47,9 +49,8 @@ class MagdaDeviceProcessor : public juce::AudioProcessor {
     bool producesMidi() const override {
         return layout_.midiOutput;
     }
-    double getTailLengthSeconds() const override {
-        return 0.0;
-    }
+    /// Infinity for a tail that never decays.
+    double getTailLengthSeconds() const override;
 
     int getNumPrograms() override {
         return 1;
@@ -69,11 +70,19 @@ class MagdaDeviceProcessor : public juce::AudioProcessor {
   private:
     class Parameter;
 
+    /// Message thread: takes the device's notifications and tells the host what changed.
+    void applyNotifications();
+    void handleAsyncUpdate() override;
+    magda_transport transportFor(int numFrames) const;
+
     juce::String deviceType_;
+    juce::String deviceName_;
     Layout layout_;
+    magda_host host_{};
     std::unique_ptr<host::AbiDevice> device_;
     std::vector<Parameter*> parameters_;
     std::vector<float> applied_;
+    std::atomic<double> sampleRate_{0.0};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MagdaDeviceProcessor)
 };

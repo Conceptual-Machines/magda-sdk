@@ -73,3 +73,17 @@ catch_discover_tests(magda_sdk_abi_tests)
 if(TARGET magda_sdk_example_tests)
     catch_discover_tests(magda_sdk_example_tests)
 endif()
+
+# The JUCE host over the reference module, when the build has JUCE (MAGDA_SDK_JUCE_DIR).
+if(TARGET juce::juce_audio_processors)
+    juce_add_console_app(magda_sdk_juce_host_tests)
+    target_sources(magda_sdk_juce_host_tests PRIVATE
+        "${MAGDA_SDK_DIR}/hosts/juce/tests/test_magda_device_processor.cpp"
+        "${MAGDA_SDK_DIR}/hosts/juce/MagdaDeviceProcessor.cpp")
+    target_include_directories(magda_sdk_juce_host_tests PRIVATE "${MAGDA_SDK_DIR}/hosts/juce")
+    target_compile_definitions(magda_sdk_juce_host_tests PRIVATE
+        JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=1)
+    target_link_libraries(magda_sdk_juce_host_tests PRIVATE
+        sdk_reference_module juce::juce_audio_processors Catch2::Catch2WithMain)
+    catch_discover_tests(magda_sdk_juce_host_tests)
+endif()

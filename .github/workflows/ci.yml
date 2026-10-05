@@ -18,6 +18,15 @@ jobs:
       - run: cmake --build build --config Release
       - run: ctest --test-dir build -C Release --output-on-failure
 
+  juce:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: git clone --depth 1 --branch 9.0.3 https://github.com/juce-framework/JUCE.git ../JUCE
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMAGDA_SDK_JUCE_DIR=../JUCE
+      - run: cmake --build build --config Release
+      - run: ctest --test-dir build -C Release --output-on-failure
+
   wasm:
     runs-on: ubuntu-latest
     steps:

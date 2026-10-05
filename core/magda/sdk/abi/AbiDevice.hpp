@@ -182,6 +182,17 @@ class AbiDevice {
     std::string manifest() const {
         return text(api_.get_manifest);
     }
+    /// One parameter as its manifest entry; empty for a slot out of range.
+    std::string parameterDescriptor(int slot) const {
+        return text([this, slot](magda_device* device, char* buffer, std::int32_t capacity,
+                                 std::int32_t* size) {
+            return api_.param_descriptor(device, slot, buffer, capacity, size);
+        });
+    }
+    /// The patches merged since the last take; empty when none is pending.
+    std::string takeStatePatch() const {
+        return text(api_.take_state_patch);
+    }
     std::string state() const {
         return text(api_.get_state);
     }
@@ -208,7 +219,7 @@ class AbiDevice {
         outEvents_[static_cast<std::size_t>(outCount_++)] = kept;
     }
 
-    std::string text(magda_text_fn fn) const {
+    template <typename TextFn> std::string text(TextFn fn) const {
         std::int32_t size = 0;
         if (fn(device_, nullptr, 0, &size) != MAGDA_ERR_BUFFER)
             return {};

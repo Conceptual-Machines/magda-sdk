@@ -1,6 +1,7 @@
 #include "MagdaDeviceProcessor.hpp"
 
 #include <atomic>
+#include <limits>
 
 namespace magda::sdk::juce_host {
 
@@ -9,27 +10,44 @@ namespace {
 constexpr auto kPluginStateFormat = "magda.plugin-state";
 constexpr int kPluginStateVersion = 1;
 
+juce::String typeNameOf(const juce::String& deviceType) {
+    if (const auto* module = host::linkedModule())
+        for (int i = 0; i < module->device_type_count; ++i)
+            if (deviceType == module->device_types[i].id)
+                return juce::String::fromUTF8(module->device_types[i].name);
+    return deviceType;
+}
+
 }  // namespace
 
-/// One manifest parameter. Values are normalized; text goes through the ABI's reference conversion.
+/**
+ * @brief One parameter slot. Values are normalized; text goes through the ABI's reference
+ * conversion, a control call, so under the callback lock.
+ */
 class MagdaDeviceProcessor::Parameter final : public juce::AudioProcessorParameterWithID {
   public:
-    Parameter(host::AbiDevice& device, int slot, const juce::var& manifest)
-        : AudioProcessorParameterWithID(juce::ParameterID(manifest["id"].toString(), 1),
-                                        manifest["name"].toString()),
+    Parameter(host::AbiDevice& device, const juce::CriticalSection& controlLock, int slot,
+              const juce::var& descriptor)
+        : AudioProcessorParameterWithID(juce::ParameterID(descriptor["id"].toString(), 1),
+                                        descriptor["name"].toString()),
           device_(device),
+          controlLock_(controlLock),
           slot_(slot),
-          unit_(manifest["unit"].toString()),
-          kind_(manifest["scale"]["kind"].toString()),
           default_(device.api().param_value(device.get(), slot)),
           value_(default_) {
-        if (const auto* choices = manifest["scale"]["choices"].getArray())
-            for (const auto& choice : *choices)
-                choices_.add(choice["label"].toString());
+        describe(descriptor);
     }
 
     int slot() const {
         return slot_;
+    }
+
+    /// Message thread, under the callback lock: re-reads the slot after a parameters change.
+    void refresh() {
+        const auto text = device_.parameterDescriptor(slot_);
+        describe(text.empty() ? juce::var()
+                              : juce::JSON::parse(juce::String::fromUTF8(text.c_str())));
+        value_.store(device_.api().param_value(device_.get(), slot_), std::memory_order_relaxed);
     }
 
     float getValue() const override {
@@ -42,7 +60,12 @@ class MagdaDeviceProcessor::Parameter final : public juce::AudioProcessorParamet
         return default_;
     }
 
+    juce::String getName(int maximumLength) const override {
+        const juce::SpinLock::ScopedLockType lock(descriptorLock_);
+        return name_.substring(0, maximumLength);
+    }
     juce::String getLabel() const override {
+        const juce::SpinLock::ScopedLockType lock(descriptorLock_);
         return unit_;
     }
 
@@ -50,26 +73,33 @@ class MagdaDeviceProcessor::Parameter final : public juce::AudioProcessorParamet
         return isChoice() || isBoolean();
     }
     bool isBoolean() const override {
+        const juce::SpinLock::ScopedLockType lock(descriptorLock_);
         return kind_ == "boolean";
     }
     int getNumSteps() const override {
         if (isBoolean())
             return 2;
         if (isChoice())
-            return choices_.size();
+            return choices().size();
         return AudioProcessorParameter::getNumSteps();
     }
     juce::StringArray getAllValueStrings() const override {
-        return isChoice() ? choices_ : juce::StringArray{};
+        return isChoice() ? choices() : juce::StringArray{};
     }
 
     juce::String getText(float normalized, int maximumLength) const override {
-        const auto real = device_.api().param_to_real(device_.get(), slot_, normalized);
+        if (!inUse())
+            return {};
+        float real = 0.0f;
+        {
+            const juce::ScopedLock lock(controlLock_);
+            real = device_.api().param_to_real(device_.get(), slot_, normalized);
+        }
         juce::String text;
         if (isBoolean())
             text = real >= 0.5f ? "On" : "Off";
-        else if (isChoice())
-            text = choices_[juce::jlimit(0, choices_.size() - 1, juce::roundToInt(real))];
+        else if (const auto labels = choices(); isChoice())
+            text = labels[juce::jlimit(0, labels.size() - 1, juce::roundToInt(real))];
         else
             text = juce::String(real, 2);
         return text.substring(0, maximumLength);
@@ -78,26 +108,54 @@ class MagdaDeviceProcessor::Parameter final : public juce::AudioProcessorParamet
     float getValueForText(const juce::String& text) const override {
         if (isBoolean())
             return text.equalsIgnoreCase("on") || text.getIntValue() != 0 ? 1.0f : 0.0f;
-        if (isChoice()) {
-            const auto index = choices_.indexOf(text, true);
-            return device_.api().param_to_normalized(device_.get(), slot_,
-                                                     static_cast<float>(juce::jmax(0, index)));
-        }
-        return device_.api().param_to_normalized(device_.get(), slot_, text.getFloatValue());
+        const auto real = isChoice()
+                              ? static_cast<float>(juce::jmax(0, choices().indexOf(text, true)))
+                              : text.getFloatValue();
+        const juce::ScopedLock lock(controlLock_);
+        return device_.api().param_to_normalized(device_.get(), slot_, real);
     }
 
   private:
+    /// A null descriptor is a slot past the instance's count: kept registered, out of use.
+    void describe(const juce::var& descriptor) {
+        juce::StringArray labels;
+        if (const auto* list = descriptor["scale"]["choices"].getArray())
+            for (const auto& choice : *list)
+                labels.add(choice["label"].toString());
+
+        const juce::SpinLock::ScopedLockType lock(descriptorLock_);
+        inUse_ = descriptor.isObject();
+        name_ = inUse_ ? descriptor["name"].toString() : juce::String("Unused");
+        unit_ = descriptor["unit"].toString();
+        kind_ = descriptor["scale"]["kind"].toString();
+        choices_ = std::move(labels);
+    }
+
+    bool inUse() const {
+        const juce::SpinLock::ScopedLockType lock(descriptorLock_);
+        return inUse_;
+    }
+    juce::StringArray choices() const {
+        const juce::SpinLock::ScopedLockType lock(descriptorLock_);
+        return choices_;
+    }
     bool isChoice() const {
+        const juce::SpinLock::ScopedLockType lock(descriptorLock_);
         return kind_ == "discrete" && choices_.size() > 1;
     }
 
     host::AbiDevice& device_;
+    const juce::CriticalSection& controlLock_;
     int slot_;
+    float default_;
+    std::atomic<float> value_;
+
+    juce::SpinLock descriptorLock_;
+    bool inUse_ = true;
+    juce::String name_;
     juce::String unit_;
     juce::String kind_;
     juce::StringArray choices_;
-    float default_;
-    std::atomic<float> value_;
 };
 
 MagdaDeviceProcessor::MagdaDeviceProcessor(const char* deviceType, Layout layout)
@@ -108,27 +166,39 @@ MagdaDeviceProcessor::MagdaDeviceProcessor(const char* deviceType, Layout layout
           return buses.withOutput("Output", juce::AudioChannelSet::stereo(), true);
       }()),
       deviceType_(deviceType),
-      layout_(layout),
-      device_(std::make_unique<host::AbiDevice>(*host::linkedModule(), deviceType)) {
+      deviceName_(typeNameOf(deviceType_)),
+      layout_(layout) {
+    host_.struct_tag = MAGDA_TAG_HOST;
+    host_.struct_size = sizeof(host_);
+    host_.context = this;
+    host_.notify = [](void* context, magda_device*) {
+        static_cast<MagdaDeviceProcessor*>(context)->triggerAsyncUpdate();
+    };
+    device_ = std::make_unique<host::AbiDevice>(*host::linkedModule(), deviceType, &host_);
     if (!hasDevice())
         return;
 
-    const auto manifest = juce::JSON::parse(juce::String::fromUTF8(device_->manifest().c_str()));
-    if (const auto* parameters = manifest["parameters"].getArray()) {
-        for (const auto& description : *parameters) {
-            auto parameter = std::make_unique<Parameter>(
-                *device_, static_cast<int>(description["index"]), description);
-            parameters_.push_back(parameter.get());
-            addParameter(parameter.release());
-        }
+    for (int slot = 0; slot < device_->parameterCount(); ++slot) {
+        const auto descriptor =
+            juce::JSON::parse(juce::String::fromUTF8(device_->parameterDescriptor(slot).c_str()));
+        auto parameter = std::make_unique<Parameter>(*device_, getCallbackLock(), slot, descriptor);
+        parameters_.push_back(parameter.get());
+        addParameter(parameter.release());
     }
     applied_.assign(parameters_.size(), -1.0f);
 }
 
-MagdaDeviceProcessor::~MagdaDeviceProcessor() = default;
+MagdaDeviceProcessor::~MagdaDeviceProcessor() {
+    device_.reset();
+    cancelPendingUpdate();
+}
 
 const juce::String MagdaDeviceProcessor::getName() const {
+#ifdef JucePlugin_Name
     return JucePlugin_Name;
+#else
+    return deviceName_;
+#endif
 }
 
 bool MagdaDeviceProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {
@@ -141,9 +211,65 @@ bool MagdaDeviceProcessor::isBusesLayoutSupported(const BusesLayout& layouts) co
 void MagdaDeviceProcessor::prepareToPlay(double sampleRate, int maximumBlockSize) {
     if (!hasDevice())
         return;
-    device_->prepare(sampleRate, maximumBlockSize);
-    std::fill(applied_.begin(), applied_.end(), -1.0f);
+    {
+        const juce::ScopedLock lock(getCallbackLock());
+        device_->prepare(sampleRate, maximumBlockSize);
+        sampleRate_.store(sampleRate, std::memory_order_relaxed);
+        std::fill(applied_.begin(), applied_.end(), -1.0f);
+    }
+    applyNotifications();
     setLatencySamples(device_->api().latency(device_->get()));
+}
+
+void MagdaDeviceProcessor::releaseResources() {
+    if (!hasDevice())
+        return;
+    const juce::ScopedLock lock(getCallbackLock());
+    device_->api().release(device_->get());
+}
+
+void MagdaDeviceProcessor::reset() {
+    if (!hasDevice())
+        return;
+    const juce::ScopedLock lock(getCallbackLock());
+    device_->api().reset(device_->get());
+}
+
+double MagdaDeviceProcessor::getTailLengthSeconds() const {
+    const auto sampleRate = sampleRate_.load(std::memory_order_relaxed);
+    if (!hasDevice() || sampleRate <= 0.0)
+        return 0.0;
+    const auto tail = device_->api().tail(device_->get());
+    if (tail < 0)
+        return std::numeric_limits<double>::infinity();
+    return static_cast<double>(tail) / sampleRate;
+}
+
+magda_transport MagdaDeviceProcessor::transportFor(int numFrames) const {
+    magda_transport transport{};
+    transport.struct_tag = MAGDA_TAG_TRANSPORT;
+    transport.struct_size = sizeof(transport);
+    juce::Optional<juce::AudioPlayHead::PositionInfo> position;
+    if (const auto* playHead = getPlayHead())
+        position = playHead->getPosition();
+    const auto sampleRate = sampleRate_.load(std::memory_order_relaxed);
+    if (!position || sampleRate <= 0.0)
+        return transport;
+
+    if (const auto seconds = position->getTimeInSeconds())
+        transport.block_start_seconds = *seconds;
+    else if (const auto samples = position->getTimeInSamples())
+        transport.block_start_seconds = static_cast<double>(*samples) / sampleRate;
+    transport.block_end_seconds = transport.block_start_seconds + numFrames / sampleRate;
+    if (position->getIsPlaying())
+        transport.flags |= MAGDA_TRANSPORT_PLAYING;
+    if (isNonRealtime())
+        transport.flags |= MAGDA_TRANSPORT_RENDERING;
+    if (const auto bpm = position->getBpm(); bpm && *bpm > 0.0) {
+        transport.tempo_kind = MAGDA_TEMPO_CONSTANT;
+        transport.bpm = *bpm;
+    }
+    return transport;
 }
 
 void MagdaDeviceProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) {
@@ -167,8 +293,9 @@ void MagdaDeviceProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
         for (const auto metadata : midi)
             device_->queueMidi(metadata.data, metadata.numBytes, metadata.samplePosition);
 
+    const auto transport = transportFor(buffer.getNumSamples());
     device_->process(buffer.getArrayOfWritePointers(), buffer.getNumChannels(),
-                     buffer.getNumSamples());
+                     buffer.getNumSamples(), getPlayHead() != nullptr ? &transport : nullptr);
 
     midi.clear();
     if (layout_.midiOutput) {
@@ -178,6 +305,36 @@ void MagdaDeviceProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
                           event.sample);
         }
     }
+}
+
+void MagdaDeviceProcessor::applyNotifications() {
+    if (!hasDevice())
+        return;
+
+    std::uint32_t flags = 0;
+    int latency = 0;
+    {
+        const juce::ScopedLock lock(getCallbackLock());
+        flags = device_->api().take_notifications(device_->get());
+        if ((flags & MAGDA_NOTIFY_PARAMETERS_CHANGED) != 0)
+            for (auto* parameter : parameters_)
+                parameter->refresh();
+        if ((flags & MAGDA_NOTIFY_STATE_CHANGED) != 0)
+            device_->takeStatePatch();
+        latency = device_->api().latency(device_->get());
+    }
+
+    if ((flags & MAGDA_NOTIFY_PROPERTIES_CHANGED) != 0)
+        setLatencySamples(latency);
+    auto details = ChangeDetails{}
+                       .withParameterInfoChanged((flags & MAGDA_NOTIFY_PARAMETERS_CHANGED) != 0)
+                       .withNonParameterStateChanged((flags & MAGDA_NOTIFY_STATE_CHANGED) != 0);
+    if (details.parameterInfoChanged || details.nonParameterStateChanged)
+        updateHostDisplay(details);
+}
+
+void MagdaDeviceProcessor::handleAsyncUpdate() {
+    applyNotifications();
 }
 
 juce::AudioProcessorEditor* MagdaDeviceProcessor::createEditor() {
@@ -192,18 +349,18 @@ void MagdaDeviceProcessor::getStateInformation(juce::MemoryBlock& destination) {
     for (auto* parameter : parameters_)
         parameters->setProperty(parameter->getParameterID(), parameter->getValue());
 
-    juce::var deviceState;
+    std::string deviceState;
     {
         const juce::ScopedLock lock(getCallbackLock());
-        deviceState = juce::JSON::parse(juce::String::fromUTF8(device_->state().c_str()));
+        deviceState = device_->state();
     }
 
-    auto* root = new juce::DynamicObject;
-    root->setProperty("format", kPluginStateFormat);
-    root->setProperty("version", kPluginStateVersion);
-    root->setProperty("parameters", juce::var(parameters));
-    root->setProperty("state", deviceState);
-    const auto text = juce::JSON::toString(juce::var(root), true).toStdString();
+    // The device document goes in verbatim, so a newer schema's text survives the round trip.
+    const auto text =
+        "{\n  \"format\": \"" + std::string(kPluginStateFormat) +
+        "\",\n  \"version\": " + std::to_string(kPluginStateVersion) +
+        ",\n  \"parameters\": " + juce::JSON::toString(juce::var(parameters), true).toStdString() +
+        ",\n  \"state\": " + deviceState + "\n}";
     destination.replaceAll(text.data(), text.size());
 }
 
@@ -221,6 +378,7 @@ void MagdaDeviceProcessor::setStateInformation(const void* data, int sizeInBytes
         const juce::ScopedLock lock(getCallbackLock());
         device_->setState(text);
     }
+    applyNotifications();
 
     if (const auto* values = root["parameters"].getDynamicObject())
         for (auto* parameter : parameters_)

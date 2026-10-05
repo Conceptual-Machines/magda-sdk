@@ -28,11 +28,29 @@ magda_sdk_add_juce_plugin(<target> MODULE <name> DEVICE <type> [EXCLUDE_FROM_ALL
                           <juce_add_plugin arguments>)
 ```
 
-`hosts/juce/MagdaDeviceProcessor` is an `AudioProcessor` over one device: parameters from the
-manifest (normalized, with text through the reference conversion), MIDI in and out, the plugin
-state document, and a generic editor. Buses follow `IS_SYNTH`: a synth has no audio input. An
-instrument AU must take MIDI, so a synth sets `NEEDS_MIDI_INPUT TRUE` even when its device
-ignores MIDI.
+`hosts/juce/MagdaDeviceProcessor` is an `AudioProcessor` over one device:
+
+- Parameters are the slots a fresh instance has, described through `param_descriptor`
+  (normalized, with text through the reference conversion under the callback lock). JUCE cannot
+  add parameters, so when a state-sourced set changes (`MAGDA_NOTIFY_PARAMETERS_CHANGED`) the
+  registered slots are re-described and re-read, a slot past the new count shows as "Unused", and
+  the host hears `parameterInfoChanged`.
+- MIDI in and out, short and long messages, at their sample positions.
+- The play head becomes the transport: block start and end, playing, rendering when non-realtime,
+  and a constant tempo when it has a BPM (none otherwise).
+- `reset` and `releaseResources` are the ABI's; the tail is the device's, infinite for -1.
+- A properties change (the ABI re-prepares the device) reaches the host as its latency; a rate
+  change is a new `prepareToPlay`. State the device reports marks the plugin dirty
+  (`nonParameterStateChanged`). Notifications come through `magda_host.notify` on the message
+  thread, and are taken straight after `prepare` and `set_state`.
+- The plugin state document, with the device document written verbatim, so a newer schema's
+  text survives a save. Denormals are flushed around `process`.
+
+Buses follow `IS_SYNTH`: a synth has no audio input. An instrument AU must take MIDI, so a synth
+sets `NEEDS_MIDI_INPUT TRUE` even when its device ignores MIDI.
+
+With `-DMAGDA_SDK_JUCE_DIR=<a JUCE checkout>`, a top-level build adds
+`magda_sdk_juce_host_tests`, the adapter over the reference module.
 
 ### Display lists
 
