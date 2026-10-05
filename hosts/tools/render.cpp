@@ -102,6 +102,22 @@ bool renderCase(const JsonValue& spec, const std::string& outDir) {
             midi.push_back(std::move(at));
         }
 
+    // An offline render: the timeline starts at zero and runs with the frames.
+    const auto* transportSpec = spec.member("transport");
+    magda_transport transport{};
+    transport.struct_tag = MAGDA_TAG_TRANSPORT;
+    transport.struct_size = sizeof(transport);
+    if (transportSpec != nullptr) {
+        const auto* playing = transportSpec->member("playing");
+        transport.flags = MAGDA_TRANSPORT_RENDERING;
+        if (playing == nullptr || playing->boolean)
+            transport.flags |= MAGDA_TRANSPORT_PLAYING;
+        if (const double bpm = number(transportSpec->member("bpm"), 0.0); bpm > 0.0) {
+            transport.tempo_kind = MAGDA_TEMPO_CONSTANT;
+            transport.bpm = bpm;
+        }
+    }
+
     const auto inputKind = text(spec.member("input"), "silence");
     const double inputFrequency = number(spec.member("inputFrequency"), 440.0);
 
@@ -122,7 +138,10 @@ bool renderCase(const JsonValue& spec, const std::string& outDir) {
             if (event.sample >= start && event.sample < start + count)
                 device.queueMidi(event.bytes.data(), static_cast<int>(event.bytes.size()),
                                  event.sample - start);
-        device.process(pointers.data(), channels, count);
+        transport.block_start_seconds = start / sampleRate;
+        transport.block_end_seconds = (start + count) / sampleRate;
+        device.process(pointers.data(), channels, count,
+                       transportSpec != nullptr ? &transport : nullptr);
     }
 
     std::ofstream file(outDir + "/" + name + ".f32", std::ios::binary);

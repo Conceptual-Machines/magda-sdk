@@ -9,6 +9,7 @@
       "state": { "schema": 2, "device": "sdkReferenceSine", "props": { "inverted": true } },
       "midi": [ { "sample": 1000, "bytes": [144, 72, 100] }, { "sample": 9001, "bytes": [144, 48, 100] } ] },
     { "name": "gain-on-sine", "device": "sdkReferenceGain", "frames": 9600, "input": "sine",
-      "inputFrequency": 997, "parameters": { "gain": 0.8 } }
+      "inputFrequency": 997, "parameters": { "gain": 0.8 } },
+    { "name": "probe-transport", "device": "sdkReferenceProbe", "frames": 4800, "transport": { "bpm": 120 } }
   ]
 }

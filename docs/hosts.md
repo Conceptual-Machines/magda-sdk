@@ -65,15 +65,22 @@ outward to whole pixels.
 
 - `getMagdaDeviceAbi` binds the module's glue synchronously, so it also runs in an
   AudioWorklet; its audio path allocates nothing.
-- `getMagdaWamProcessor` is the `WamProcessor`: parameters from the manifest (booleans and
-  choices as WAM booleans and choices, the rest normalized floats), MIDI and sysex from the WAM
-  event queue, emitted MIDI back onto it, and the plugin state document.
+- `getMagdaWamProcessor` is the `WamProcessor`. Parameters are a fresh instance's slots,
+  described through `param_descriptor` (booleans and choices as WAM booleans and choices, the rest
+  normalized floats); on `MAGDA_NOTIFY_PARAMETERS_CHANGED` the registered ids are re-described and
+  re-read, a slot past the new count shows as "Unused". Notifications are pulled after `prepare`,
+  after `set_state` and at the end of each render quantum; latency becomes the compensation delay.
+- MIDI and sysex come from the WAM event queue and emitted MIDI goes back onto it. The WAM
+  transport becomes the ABI's: the bar counts time-signature beats at the tempo, a constant tempo,
+  playing, and rendering under an `OfflineAudioContext`.
+- State is the plugin state document.
 - `createMagdaWam({ wasmUrl, descriptorUrl, deviceType })` returns the `WebAudioModule` class for
   a device. The worklet cannot fetch, so the main thread loads the wasm bytes and hands them to
   the processor.
 
 `hosts/wam/js/demo/index.html` is a one-plugin WAM host. With `?autocheck` it renders offline
-through the WAM and through the ABI directly and reports whether they match.
+through the WAM and through the ABI directly and reports whether they match; `&bpm=` adds a
+playing transport and `&state=` a device state document.
 
 ## Parity
 
@@ -86,8 +93,9 @@ renders every case natively and through the wasm module in node and fails on any
 differs by more than the tolerance, or on a silent render unless the case sets `expectSilence`.
 A corpus is `{"format": "magda.parity-corpus", "version": 1, "cases": [...]}`; a case names
 `device`, and optionally `sampleRate`, `blockSize`, `channels`, `frames`, `parameters` (stable id
-to normalized value), `state` (a device state document), `midi` (`{sample, bytes}`), and `input`
-(`silence`, `impulse` or `sine` at `inputFrequency`). `hosts/parity/reference-corpus.json` runs
+to normalized value), `state` (a device state document), `midi` (`{sample, bytes}`), `input`
+(`silence`, `impulse` or `sine` at `inputFrequency`), and `transport` (`{bpm, playing}`: a
+rendering timeline from zero, playing unless `playing` is false). `hosts/parity/reference-corpus.json` runs
 the reference module in this repo's CI.
 
 ## Canvas 2D

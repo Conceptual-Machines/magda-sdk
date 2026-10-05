@@ -253,6 +253,23 @@ TEST_CASE("Transport and sidechain reach the device as the host passed them", "[
     CHECK(api().tail(probe.get()) == -1);
 }
 
+TEST_CASE("A split call gives each prepared block its slice of the transport", "[abi]") {
+    AbiDevice probe(*linkedModule(), "sdkReferenceProbe");
+    REQUIRE(probe.prepare(48000.0, 8) == MAGDA_OK);
+    Stereo audio(16);
+
+    magda_transport transport{};
+    transport.struct_tag = MAGDA_TAG_TRANSPORT;
+    transport.struct_size = sizeof(transport);
+    transport.tempo_kind = MAGDA_TEMPO_CONSTANT;
+    transport.bpm = 120.0;
+    transport.block_start_seconds = 1.5;
+    transport.block_end_seconds = 1.5 + 16 / 48000.0;
+    REQUIRE(probe.process(audio.pointers.data(), 2, 16, &transport) == MAGDA_OK);
+    CHECK(audio.left[0] == 3.0f);
+    CHECK(audio.left[8] == Catch::Approx(2.0 * (1.5 + 8 / 48000.0)));
+}
+
 TEST_CASE("Notifications are pulled, announced outside set_state, and carry the patch", "[abi]") {
     struct Counter {
         int calls = 0;

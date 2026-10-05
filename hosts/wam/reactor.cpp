@@ -13,7 +13,14 @@ struct WamDevice {
     explicit WamDevice(const char* type) : device(*magda::sdk::host::linkedModule(), type) {}
     AbiDevice device;
     std::string text;
+    double sampleRate = 0.0;
 };
+
+/// Null for empty text, so JS reads it as absent.
+const char* textOrNull(WamDevice* wam, std::string text) {
+    wam->text = std::move(text);
+    return wam->text.empty() ? nullptr : wam->text.c_str();
+}
 
 const magda_module& module() {
     return *magda::sdk::host::linkedModule();
@@ -46,7 +53,14 @@ void magda_wam_destroy(WamDevice* wam) {
 }
 
 int magda_wam_prepare(WamDevice* wam, double sampleRate, int maxBlockSize) {
-    return wam->device.prepare(sampleRate, maxBlockSize);
+    const auto status = wam->device.prepare(sampleRate, maxBlockSize);
+    if (status == MAGDA_OK)
+        wam->sampleRate = sampleRate;
+    return status;
+}
+
+void magda_wam_release(WamDevice* wam) {
+    wam->device.api().release(wam->device.get());
 }
 
 void magda_wam_reset(WamDevice* wam) {
@@ -57,8 +71,32 @@ int magda_wam_latency(WamDevice* wam) {
     return wam->device.api().latency(wam->device.get());
 }
 
-int magda_wam_process(WamDevice* wam, float* const* channels, int numChannels, int numFrames) {
-    return wam->device.process(channels, numChannels, numFrames);
+/// Samples, or -1 for a tail that never decays; a double so JS needs no BigInt.
+double magda_wam_tail(WamDevice* wam) {
+    return static_cast<double>(wam->device.api().tail(wam->device.get()));
+}
+
+/**
+ * @brief Audio. @p transportFlags below zero passes no transport; otherwise it holds the
+ * MAGDA_TRANSPORT_* flags, the block starts at @p startSeconds, and @p bpm above zero is a
+ * constant tempo.
+ */
+int magda_wam_process(WamDevice* wam, float* const* channels, int numChannels, int numFrames,
+                      int transportFlags, double startSeconds, double bpm) {
+    if (transportFlags < 0 || wam->sampleRate <= 0.0)
+        return wam->device.process(channels, numChannels, numFrames);
+
+    magda_transport transport{};
+    transport.struct_tag = MAGDA_TAG_TRANSPORT;
+    transport.struct_size = sizeof(transport);
+    transport.flags = static_cast<std::uint32_t>(transportFlags);
+    transport.block_start_seconds = startSeconds;
+    transport.block_end_seconds = startSeconds + numFrames / wam->sampleRate;
+    if (bpm > 0.0) {
+        transport.tempo_kind = MAGDA_TEMPO_CONSTANT;
+        transport.bpm = bpm;
+    }
+    return wam->device.process(channels, numChannels, numFrames, &transport);
 }
 
 int magda_wam_set_param(WamDevice* wam, int slot, float normalized) {
@@ -71,6 +109,15 @@ float magda_wam_get_param(WamDevice* wam, int slot) {
 
 int magda_wam_param_count(WamDevice* wam) {
     return wam->device.parameterCount();
+}
+
+int magda_wam_param_offered(WamDevice* wam, int slot) {
+    return wam->device.api().param_offered(wam->device.get(), slot);
+}
+
+/// The slot's manifest entry, null past the instance's count. Valid until the next text call.
+const char* magda_wam_param_descriptor(WamDevice* wam, int slot) {
+    return textOrNull(wam, wam->device.parameterDescriptor(slot));
 }
 
 float magda_wam_param_to_real(WamDevice* wam, int slot, float normalized) {
@@ -106,6 +153,14 @@ const char* magda_wam_get_state(WamDevice* wam) {
 
 int magda_wam_set_state(WamDevice* wam, const char* json, int size) {
     return wam->device.setState(std::string_view(json, static_cast<std::size_t>(size)));
+}
+
+unsigned magda_wam_take_notifications(WamDevice* wam) {
+    return wam->device.api().take_notifications(wam->device.get());
+}
+
+const char* magda_wam_take_state_patch(WamDevice* wam) {
+    return textOrNull(wam, wam->device.takeStatePatch());
 }
 
 const char* magda_wam_get_manifest(WamDevice* wam) {

@@ -115,15 +115,22 @@ const getMagdaDeviceAbi = (moduleId) => {
 			return this.abi.magda_wam_prepare(this.handle, sampleRate, maxBlockSize);
 		}
 
+		release() { this.abi.magda_wam_release(this.handle); }
+
 		reset() { this.abi.magda_wam_reset(this.handle); }
 
 		get latency() { return this.abi.magda_wam_latency(this.handle); }
 
+		/** Samples, or -1 for a tail that never decays. */
+		get tail() { return this.abi.magda_wam_tail(this.handle); }
+
 		/**
 		 * Audio. In place over @p channels, frames [start, end). No allocation.
 		 * @param {Float32Array[]} channels
+		 * @param {{ playing?: boolean, rendering?: boolean, startSeconds: number, bpm?: number } | null} [transport]
+		 *   the timeline at @p start; a bpm above zero is a constant tempo
 		 */
-		process(channels, start = 0, end = channels.length ? channels[0].length : 0) {
+		process(channels, start = 0, end = channels.length ? channels[0].length : 0, transport = null) {
 			const frames = end - start;
 			const count = Math.min(channels.length, this.channelCapacity);
 			if (frames <= 0 || frames > this.frameCapacity) return frames === 0 ? 0 : -1;
@@ -133,7 +140,9 @@ const getMagdaDeviceAbi = (moduleId) => {
 				const offset = (this.channelBuffers >> 2) + c * this.frameCapacity - start;
 				for (let i = start; i < end; i++) heap[offset + i] = channel[i];
 			}
-			const result = this.abi.magda_wam_process(this.handle, this.channelPointers, count, frames);
+			const flags = transport ? (transport.playing ? 1 : 0) | (transport.rendering ? 2 : 0) : -1;
+			const result = this.abi.magda_wam_process(this.handle, this.channelPointers, count, frames, flags,
+				transport ? transport.startSeconds : 0, transport?.bpm ?? 0);
 			heap = this.module.heapF32;
 			for (let c = 0; c < count; c++) {
 				const channel = channels[c];
@@ -144,6 +153,14 @@ const getMagdaDeviceAbi = (moduleId) => {
 		}
 
 		get parameterCount() { return this.abi.magda_wam_param_count(this.handle); }
+
+		isOffered(slot) { return this.abi.magda_wam_param_offered(this.handle, slot) !== 0; }
+
+		/** The slot's manifest entry, parsed; null past the instance's count. */
+		parameterDescriptor(slot) {
+			const text = this.module.readString(this.abi.magda_wam_param_descriptor(this.handle, slot));
+			return text === null ? null : JSON.parse(text);
+		}
 
 		setParameter(slot, normalized) { return this.abi.magda_wam_set_param(this.handle, slot, normalized); }
 
@@ -185,7 +202,13 @@ const getMagdaDeviceAbi = (moduleId) => {
 			return result;
 		}
 
-		/** The parameter manifest, parsed. */
+		/** MAGDA_NOTIFY_* flags pending since the last take. */
+		takeNotifications() { return this.abi.magda_wam_take_notifications(this.handle) >>> 0; }
+
+		/** The state patches merged since the last take, or null. */
+		takeStatePatch() { return this.module.readString(this.abi.magda_wam_take_state_patch(this.handle)); }
+
+		/** The instance's parameter manifest, parsed. */
 		get manifest() {
 			const text = this.module.readString(this.abi.magda_wam_get_manifest(this.handle));
 			return text === null ? null : JSON.parse(text);
@@ -207,12 +230,16 @@ const getMagdaDeviceAbi = (moduleId) => {
 		}
 	}
 
+	// MAGDA_NOTIFY_* in magda_device.h.
+	const Notify = { STATE_CHANGED: 1, PARAMETERS_CHANGED: 2, PROPERTIES_CHANGED: 4 };
+
 	if (moduleId && globalThis.webAudioModules) {
 		const scope = globalThis.webAudioModules.getModuleScope(moduleId);
 		scope.MagdaDeviceModule = MagdaDeviceModule;
+		scope.MagdaNotify = Notify;
 	}
 
-	return { MagdaDeviceModule, MagdaDevice };
+	return { MagdaDeviceModule, MagdaDevice, Notify };
 };
 
 export default getMagdaDeviceAbi;
