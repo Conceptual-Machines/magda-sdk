@@ -118,6 +118,11 @@ if(EMSCRIPTEN AND PROJECT_IS_TOP_LEVEL)
         -sEXPORTED_FUNCTIONS=${_ui_demo_export_list})
 endif()
 
+set(MAGDA_SDK_JUCE_DIR "" CACHE PATH "A JUCE checkout, for the JUCE host tests")
+if(MAGDA_SDK_JUCE_DIR AND PROJECT_IS_TOP_LEVEL)
+    add_subdirectory("${MAGDA_SDK_JUCE_DIR}" juce EXCLUDE_FROM_ALL)
+endif()
+
 option(MAGDA_SDK_BUILD_TESTS "Build the SDK tests" ${PROJECT_IS_TOP_LEVEL})
 if(MAGDA_SDK_BUILD_TESTS)
     enable_testing()
