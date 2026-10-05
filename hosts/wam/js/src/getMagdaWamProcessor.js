@@ -6,59 +6,133 @@
  */
 const getMagdaWamProcessor = (moduleId) => {
 	const scope = globalThis.webAudioModules.getModuleScope(moduleId);
-	const { WamProcessor, WamParameterInfo, MagdaDeviceModule } = scope;
+	const {
+		WamProcessor, WamParameter, WamParameterInfo, WamParameterInterpolator, MagdaDeviceModule, MagdaNotify,
+	} = scope;
 
 	class MagdaWamProcessor extends WamProcessor {
 		constructor(options) {
 			super(options);
-			const { wasmBytes, deviceType, channels } = options.processorOptions;
-			this._device = new MagdaDeviceModule(wasmBytes).create(deviceType);
+			const { wasmBytes, deviceType, channels, rendering } = options.processorOptions;
+			const device = new MagdaDeviceModule(wasmBytes).create(deviceType);
+			this._device = device;
 			this._channels = channels ?? 2;
 			// The render quantum is fixed at 128; process() slices never exceed it.
-			this._device.prepare(globalThis.sampleRate, this._samplesPerQuantum, this._channels);
-			this._parameters = this._device.manifest.parameters;
-			this._applied = new Float32Array(this._parameters.length).fill(-1);
+			device.prepare(globalThis.sampleRate, this._samplesPerQuantum, this._channels);
+			if (device.takeNotifications() & MagdaNotify.STATE_CHANGED) device.takeStatePatch();
+			this._compensationDelay = device.latency / globalThis.sampleRate;
+
+			// WAM cannot add parameters: the ids are a fresh instance's slots, re-described on a change.
+			this._ids = [];
+			this._defaults = [];
+			for (let slot = 0; slot < device.parameterCount; slot++) {
+				this._ids.push(device.parameterDescriptor(slot).id);
+				this._defaults.push(device.getParameter(slot));
+			}
+			this._describe();
+			this._applied = new Float32Array(this._ids.length).fill(-1);
 			this._scratch = Array.from({ length: this._channels }, () => new Float32Array(this._samplesPerQuantum));
+			this._transport = null;
+			this._timeline = { playing: false, rendering: !!rendering, startSeconds: 0, bpm: 0 };
+		}
+
+		/** A null descriptor is a slot past the instance's count: kept registered, out of use. */
+		_describe() {
+			this._descriptors = this._ids.map((_, slot) => this._device.parameterDescriptor(slot));
+		}
+
+		_infoFor(slot) {
+			const id = this._ids[slot];
+			const descriptor = this._descriptors[slot];
+			if (!descriptor) return new WamParameterInfo(id, { type: 'float', label: 'Unused', minValue: 0, maxValue: 1 });
+			const kind = descriptor.scale?.kind;
+			const label = descriptor.name ?? descriptor.id;
+			const defaultValue = this._toWamValue(slot, this._defaults[slot], kind, descriptor);
+			if (kind === 'boolean') return new WamParameterInfo(id, { type: 'boolean', label, defaultValue });
+			if (kind === 'discrete' && descriptor.scale.choices?.length > 1) {
+				const choices = descriptor.scale.choices.map((choice) => choice.label);
+				return new WamParameterInfo(id, { type: 'choice', label, choices, defaultValue });
+			}
+			return new WamParameterInfo(id, {
+				type: 'float', label, defaultValue, minValue: 0, maxValue: 1, units: descriptor.unit ?? '',
+			});
 		}
 
 		_generateWamParameterInfo() {
-			const info = {};
-			const device = this._device;
-			this._parameters.forEach((parameter, slot) => {
-				const normalized = device.getParameter(slot);
-				const kind = parameter.scale?.kind;
-				const label = parameter.name ?? parameter.id;
-				if (kind === 'boolean') {
-					info[parameter.id] = new WamParameterInfo(parameter.id, {
-						type: 'boolean', label, defaultValue: normalized >= 0.5 ? 1 : 0,
-					});
-				} else if (kind === 'discrete' && parameter.scale.choices?.length > 1) {
-					const choices = parameter.scale.choices.map((choice) => choice.label);
-					const index = Math.round(device.toReal(slot, normalized));
-					info[parameter.id] = new WamParameterInfo(parameter.id, {
-						type: 'choice', label, choices, defaultValue: Math.min(Math.max(index, 0), choices.length - 1),
-					});
-				} else {
-					info[parameter.id] = new WamParameterInfo(parameter.id, {
-						type: 'float', label, defaultValue: normalized, minValue: 0, maxValue: 1, units: parameter.unit ?? '',
-					});
-				}
-			});
-			return info;
+			return Object.fromEntries(this._ids.map((id, slot) => [id, this._infoFor(slot)]));
+		}
+
+		/** The device's normalized position, in the parameter's WAM domain. */
+		_toWamValue(slot, normalized, kind = this._descriptors[slot]?.scale?.kind, descriptor = this._descriptors[slot]) {
+			if (kind === 'boolean') return normalized >= 0.5 ? 1 : 0;
+			const count = descriptor?.scale?.choices?.length ?? 0;
+			if (kind === 'discrete' && count > 1) {
+				return Math.min(Math.max(Math.round(this._device.toReal(slot, normalized)), 0), count - 1);
+			}
+			return normalized;
 		}
 
 		/** A WAM value in the parameter's own domain, to the device's normalized position. */
 		_toNormalized(slot, value) {
-			const { type } = this._parameterInfo[this._parameters[slot].id];
+			const { type } = this._parameterInfo[this._ids[slot]];
 			if (type === 'boolean') return value >= 0.5 ? 1 : 0;
 			if (type === 'choice') return this._device.toNormalized(slot, value);
 			return value;
 		}
 
+		/** Re-describes every registered slot and re-reads its value from the device. */
+		_refreshParameters() {
+			this._describe();
+			this._ids.forEach((id, slot) => {
+				const info = this._infoFor(slot);
+				const normalized = this._device.getParameter(slot);
+				const parameter = new WamParameter(info);
+				parameter.value = this._toWamValue(slot, normalized);
+				const interpolator = new WamParameterInterpolator(info, 256);
+				interpolator.setStartValue(parameter.value);
+				this._parameterInfo[id] = info;
+				this._parameterState[id] = parameter;
+				this._parameterInterpolators[id] = interpolator;
+				this._applied[slot] = normalized;
+			});
+		}
+
+		/** Takes what the device has pending; the worklet is its control thread between quanta. */
+		_applyNotifications() {
+			const flags = this._device.takeNotifications();
+			if (flags & MagdaNotify.PARAMETERS_CHANGED) this._refreshParameters();
+			if (flags & MagdaNotify.STATE_CHANGED) this._device.takeStatePatch();
+			if (flags & MagdaNotify.PROPERTIES_CHANGED) this._compensationDelay = this._device.latency / globalThis.sampleRate;
+		}
+
+		_onTransport(transportData) {
+			this._transport = transportData;
+		}
+
+		/**
+		 * The timeline at @p startSample, or null before the host sent a transport. WAM counts the
+		 * bar in time-signature beats at the tempo.
+		 */
+		_timelineAt(startSample) {
+			const transport = this._transport;
+			if (!transport) return null;
+			const timeline = this._timeline;
+			const bpm = transport.tempo > 0 ? transport.tempo : 0;
+			let beats = transport.currentBar * transport.timeSigNumerator;
+			if (transport.playing && bpm > 0) {
+				const now = globalThis.currentTime + startSample / globalThis.sampleRate;
+				beats += Math.max(0, now - transport.currentBarStarted) * bpm / 60;
+			}
+			timeline.playing = !!transport.playing;
+			timeline.bpm = bpm;
+			timeline.startSeconds = bpm > 0 ? beats * 60 / bpm : 0;
+			return timeline;
+		}
+
 		_applyParameters() {
-			for (let slot = 0; slot < this._parameters.length; slot++) {
-				const state = this._parameterState[this._parameters[slot].id];
-				if (!state) continue;
+			for (let slot = 0; slot < this._ids.length; slot++) {
+				const state = this._parameterState[this._ids[slot]];
+				if (!state || !this._descriptors[slot]) continue;
 				const normalized = this._toNormalized(slot, state.value);
 				if (normalized !== this._applied[slot]) {
 					this._device.setParameter(slot, normalized);
@@ -84,7 +158,7 @@ const getMagdaWamProcessor = (moduleId) => {
 				const source = input[c] ?? input[0];
 				for (let i = startSample; i < endSample; i++) buffer[i] = source ? source[i] : 0;
 			}
-			this._device.process(this._scratch, startSample, endSample);
+			this._device.process(this._scratch, startSample, endSample, this._timelineAt(startSample));
 			for (let c = 0; c < output.length; c++) {
 				const buffer = this._scratch[Math.min(c, this._channels - 1)];
 				for (let i = startSample; i < endSample; i++) output[c][i] = buffer[i];
@@ -96,13 +170,14 @@ const getMagdaWamProcessor = (moduleId) => {
 					? { type: 'wam-sysex', time: time + (startSample + sampleOffset) / globalThis.sampleRate, data: { bytes } }
 					: { type: 'wam-midi', time: time + (startSample + sampleOffset) / globalThis.sampleRate, data: { bytes: Array.from(bytes) } })));
 			}
+			if (endSample === this._samplesPerQuantum) this._applyNotifications();
 		}
 
 		/** The plugin state shared with the JUCE host (docs/abi.md). */
 		_getState() {
 			const parameters = {};
-			this._parameters.forEach((parameter, slot) => {
-				parameters[parameter.id] = this._device.getParameter(slot);
+			this._ids.forEach((id, slot) => {
+				parameters[id] = this._device.getParameter(slot);
 			});
 			return { format: 'magda.plugin-state', version: 1, parameters, state: JSON.parse(this._device.getState()) };
 		}
@@ -110,16 +185,11 @@ const getMagdaWamProcessor = (moduleId) => {
 		_setState(state) {
 			if (!state) return;
 			if (state.state) this._device.setState(JSON.stringify(state.state));
+			this._applyNotifications();
 			if (state.parameters) {
 				const values = {};
-				this._parameters.forEach((parameter, slot) => {
-					if (!(parameter.id in state.parameters)) return;
-					const normalized = state.parameters[parameter.id];
-					const { type } = this._parameterInfo[parameter.id];
-					let value = normalized;
-					if (type === 'boolean') value = normalized >= 0.5 ? 1 : 0;
-					else if (type === 'choice') value = Math.round(this._device.toReal(slot, normalized));
-					values[parameter.id] = { id: parameter.id, value, normalized: false };
+				this._ids.forEach((id, slot) => {
+					if (id in state.parameters) values[id] = { id, value: this._toWamValue(slot, state.parameters[id]), normalized: false };
 				});
 				this._setParameterValues(values, false);
 			}

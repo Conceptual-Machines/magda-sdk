@@ -39,7 +39,10 @@ const createMagdaWam = ({ wasmUrl, descriptorUrl, deviceType, channels = 2 }) =>
 				numberOfInputs: this.descriptor.hasAudioInput ? 1 : 0,
 				numberOfOutputs: 1,
 				outputChannelCount: [channels],
-				processorOptions: { wasmBytes: this._wasmBytes, deviceType, channels },
+				processorOptions: {
+					wasmBytes: this._wasmBytes, deviceType, channels,
+					rendering: typeof OfflineAudioContext !== 'undefined' && this.audioContext instanceof OfflineAudioContext,
+				},
 			});
 			await node._initialize();
 			if (initialState) await node.setState(initialState);

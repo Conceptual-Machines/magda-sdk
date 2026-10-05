@@ -14,11 +14,13 @@ function(magda_sdk_add_device_module name)
     if(EMSCRIPTEN)
         set(_abi_exports
             _magda_module_entry _magda_wam_type_count _magda_wam_type_at _magda_wam_create
-            _magda_wam_destroy _magda_wam_prepare _magda_wam_reset _magda_wam_latency
-            _magda_wam_process _magda_wam_set_param _magda_wam_get_param _magda_wam_param_count
-            _magda_wam_param_to_real _magda_wam_param_to_normalized _magda_wam_midi
-            _magda_wam_midi_out_count _magda_wam_midi_out_at _magda_wam_get_state
-            _magda_wam_set_state _magda_wam_get_manifest _magda_wam_last_error _malloc _free)
+            _magda_wam_destroy _magda_wam_prepare _magda_wam_release _magda_wam_reset
+            _magda_wam_latency _magda_wam_tail _magda_wam_process _magda_wam_set_param
+            _magda_wam_get_param _magda_wam_param_count _magda_wam_param_offered
+            _magda_wam_param_descriptor _magda_wam_param_to_real _magda_wam_param_to_normalized
+            _magda_wam_midi _magda_wam_midi_out_count _magda_wam_midi_out_at _magda_wam_get_state
+            _magda_wam_set_state _magda_wam_take_notifications _magda_wam_take_state_patch
+            _magda_wam_get_manifest _magda_wam_last_error _malloc _free)
         list(JOIN _abi_exports "," _exports)
         add_executable(${name}_wasm "${MAGDA_SDK_DIR}/hosts/wam/reactor.cpp")
         target_link_libraries(${name}_wasm PRIVATE ${name}_module)

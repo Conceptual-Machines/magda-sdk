@@ -142,6 +142,18 @@ class AbiDevice {
             out.bytes = chunkBytes_.data();
             out.byte_capacity = static_cast<std::uint32_t>(kSysexCapacity - outBytesUsed_);
 
+            // Each prepared block gets its own slice of the call's timeline.
+            magda_transport chunkTransport{};
+            if (transport != nullptr) {
+                chunkTransport = *transport;
+                if (numFrames > 0) {
+                    const auto from = transport->block_start_seconds;
+                    const auto span = transport->block_end_seconds - from;
+                    chunkTransport.block_start_seconds = from + span * start / numFrames;
+                    chunkTransport.block_end_seconds = from + span * (start + frames) / numFrames;
+                }
+            }
+
             magda_process p{};
             p.struct_tag = MAGDA_TAG_PROCESS;
             p.struct_size = sizeof(p);
@@ -150,7 +162,7 @@ class AbiDevice {
             p.channels = pointers.data();
             p.midi_in = &in;
             p.midi_out = &out;
-            p.transport = transport;
+            p.transport = transport != nullptr ? &chunkTransport : nullptr;
             status = api_.process(device_, &p);
             if (status != MAGDA_OK)
                 break;

@@ -45,6 +45,9 @@ const renderWasm = (spec) => {
 		if (id in slots) device.setParameter(slots[id], value);
 
 	const output = Array.from({ length: channels }, () => new Float32Array(frames));
+	const transport = spec.transport
+		? { playing: spec.transport.playing ?? true, rendering: true, startSeconds: 0, bpm: spec.transport.bpm ?? 0 }
+		: null;
 	const input = spec.input ?? 'silence';
 	const inputFrequency = spec.inputFrequency ?? 440;
 	for (let start = 0; start < frames; start += blockSize) {
@@ -53,7 +56,8 @@ const renderWasm = (spec) => {
 			for (let i = start; i < end; i++) channel[i] = inputSample(input, inputFrequency, i, sampleRate);
 		for (const event of spec.midi ?? [])
 			if (event.sample >= start && event.sample < end) device.midi(event.bytes, event.sample - start);
-		device.process(output, start, end);
+		if (transport) transport.startSeconds = start / sampleRate;
+		device.process(output, start, end, transport);
 	}
 	device.destroy();
 	return output;

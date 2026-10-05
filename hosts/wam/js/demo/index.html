@@ -15,7 +15,7 @@
 </head>
 <body>
 <h1>MAGDA WAM Host</h1>
-<p>Query: <code>?wasm=&amp;descriptor=&amp;device=</code>. The check renders offline through the WAM and through the ABI directly; an effect gets a 220 Hz sine.</p>
+<p>Query: <code>?wasm=&amp;descriptor=&amp;device=</code>, <code>&amp;bpm=</code> for a playing transport and <code>&amp;state=</code> for a device state document. The check renders offline through the WAM and through the ABI directly; an effect gets a 220 Hz sine.</p>
 <button id="play">Play</button> <button id="check">Run check</button>
 <div id="params"></div>
 <pre id="result">idle</pre>
@@ -28,6 +28,8 @@ const query = new URLSearchParams(location.search);
 const wasmUrl = new URL(query.get('wasm') ?? './module.wasm', location.href);
 const descriptorUrl = new URL(query.get('descriptor') ?? './descriptor.json', location.href);
 const deviceType = query.get('device');
+const bpm = Number(query.get('bpm') ?? 0);
+const deviceState = query.get('state');
 const Wam = createMagdaWam({ wasmUrl, descriptorUrl, deviceType });
 const result = document.getElementById('result');
 
@@ -41,6 +43,7 @@ async function check() {
   const frames = 4800;
   const offline = new OfflineAudioContext({ numberOfChannels: 2, length: frames, sampleRate });
   const wam = await instantiate(offline);
+  if (deviceState) await wam.audioNode.setState({ format: 'magda.plugin-state', version: 1, state: JSON.parse(deviceState) });
   const info = await wam.audioNode.getParameterInfo();
   const input = Float32Array.from({ length: frames }, (_, i) => Math.fround(0.5 * Math.sin(2 * Math.PI * 220 * i / sampleRate)));
   const hasInput = wam.descriptor.hasAudioInput;
@@ -53,14 +56,24 @@ async function check() {
     source.start();
   }
   wam.audioNode.connect(offline.destination);
+  if (bpm > 0) {
+    wam.audioNode.scheduleEvents({ type: 'wam-transport', time: 0, data: {
+      currentBar: 0, currentBarStarted: 0, tempo: bpm, timeSigNumerator: 4, timeSigDenominator: 4, playing: true,
+    } });
+  }
   const rendered = await offline.startRendering();
 
   const { MagdaDeviceModule } = getMagdaDeviceAbi();
   const module = new MagdaDeviceModule(await (await fetch(wasmUrl)).arrayBuffer());
   const device = module.create(deviceType);
   device.prepare(sampleRate, 128, 2);
+  if (deviceState) device.setState(deviceState);
   const direct = hasInput ? [input.slice(), input.slice()] : [new Float32Array(frames), new Float32Array(frames)];
-  for (let start = 0; start < frames; start += 128) device.process(direct, start, Math.min(frames, start + 128));
+  const transport = bpm > 0 ? { playing: true, rendering: true, startSeconds: 0, bpm } : null;
+  for (let start = 0; start < frames; start += 128) {
+    if (transport) transport.startSeconds = start / sampleRate;
+    device.process(direct, start, Math.min(frames, start + 128), transport);
+  }
   const state = await wam.audioNode.getState();
 
   let maxDiff = 0, peak = 0;
@@ -73,7 +86,7 @@ async function check() {
   }
   const ok = maxDiff === 0 && peak > 0;
   result.textContent = `${ok ? 'PASS' : 'FAIL'} max diff ${maxDiff} peak ${peak.toFixed(4)}\n` +
-    `parameters ${Object.keys(info).join(', ')}\nstate ${JSON.stringify(state)}`;
+    `parameters ${Object.values(info).map((p) => `${p.id} (${p.label})`).join(', ')}\nstate ${JSON.stringify(state)}`;
   result.dataset.status = ok ? 'pass' : 'fail';
 }
 
