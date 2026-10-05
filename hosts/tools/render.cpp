@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "magda/sdk/abi/magda_device.h"
+#include "magda/sdk/abi/AbiDevice.hpp"
 #include "magda/sdk/state/detail/Json.hpp"
 
 namespace {
@@ -47,11 +47,9 @@ float inputSample(const std::string& kind, double frequency, int frame, double s
     return 0.0f;
 }
 
-std::map<std::string, int> slotsById(magda_device* device) {
+std::map<std::string, int> slotsById(const magda::sdk::host::AbiDevice& device) {
     std::map<std::string, int> slots;
-    const char* manifestText = magda_device_get_manifest(device);
-    if (manifestText == nullptr)
-        return slots;
+    const auto manifestText = device.manifest();
     std::string error;
     const auto manifest = magda::sdk::detail::parseJson(manifestText, error);
     if (!manifest)
@@ -71,8 +69,8 @@ bool renderCase(const JsonValue& spec, const std::string& outDir) {
     const int channels = static_cast<int>(number(spec.member("channels"), 2));
     const int frames = static_cast<int>(number(spec.member("frames"), sampleRate));
 
-    auto* device = magda_device_create(type.c_str());
-    if (device == nullptr) {
+    magda::sdk::host::AbiDevice device(*magda::sdk::host::linkedModule(), type.c_str());
+    if (!device) {
         std::cerr << name << ": unknown device " << type << "\n";
         return false;
     }
@@ -80,20 +78,19 @@ bool renderCase(const JsonValue& spec, const std::string& outDir) {
     if (const auto* state = spec.member("state")) {
         std::string json, error;
         magda::sdk::detail::appendJson(json, *state, -1, error);
-        if (magda_device_set_state(device, json.c_str(), static_cast<int>(json.size())) != MAGDA_OK)
-            std::cerr << name << ": state: " << magda_device_last_error(device) << "\n";
+        if (device.setState(json) != MAGDA_OK)
+            std::cerr << name << ": state: " << device.lastError() << "\n";
     }
 
-    if (magda_device_prepare(device, sampleRate, blockSize) != MAGDA_OK) {
-        magda_device_destroy(device);
+    if (device.prepare(sampleRate, blockSize) != MAGDA_OK)
         return false;
-    }
 
     const auto slots = slotsById(device);
     if (const auto* parameters = spec.member("parameters"))
         for (const auto& [id, value] : parameters->object)
             if (const auto slot = slots.find(id); slot != slots.end())
-                magda_device_set_param(device, slot->second, static_cast<float>(number(&value, 0)));
+                device.api().set_param(device.get(), slot->second,
+                                       static_cast<float>(number(&value, 0)));
 
     std::vector<MidiAt> midi;
     if (const auto* events = spec.member("midi"))
@@ -123,11 +120,10 @@ bool renderCase(const JsonValue& spec, const std::string& outDir) {
         }
         for (const auto& event : midi)
             if (event.sample >= start && event.sample < start + count)
-                magda_device_midi(device, event.bytes.data(), static_cast<int>(event.bytes.size()),
-                                  event.sample - start);
-        magda_device_process(device, pointers.data(), channels, count);
+                device.queueMidi(event.bytes.data(), static_cast<int>(event.bytes.size()),
+                                 event.sample - start);
+        device.process(pointers.data(), channels, count);
     }
-    magda_device_destroy(device);
 
     std::ofstream file(outDir + "/" + name + ".f32", std::ios::binary);
     for (const auto& channel : output)

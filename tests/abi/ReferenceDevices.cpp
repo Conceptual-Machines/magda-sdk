@@ -1,10 +1,11 @@
 // The reference module the ABI tests and the SDK's own parity run use.
 
+#include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <string>
 
 #include "magda/sdk/abi/DeviceModule.hpp"
-#include "magda/sdk/device/Analysis.hpp"
 
 namespace {
 
@@ -32,8 +33,8 @@ ParameterDescriptor sineDescriptor(int slot) {
     return descriptor;
 }
 
-/// A sine whose note-ons retune it; state "inverted" flips its polarity. Analyzes to RMS.
-class ReferenceSine final : public Device, public AnalyzingDevice {
+/// A sine whose note-ons retune it; state "inverted" flips its polarity.
+class ReferenceSine final : public Device {
   public:
     DeviceProperties properties() const override {
         return {.pluginId = "sdkReferenceSine",
@@ -96,14 +97,6 @@ class ReferenceSine final : public Device, public AnalyzingDevice {
         return RestoreResult::success();
     }
 
-    AnalysisResult analyze(std::span<const float> mono, double) override {
-        double sum = 0.0;
-        for (const auto sample : mono)
-            sum += static_cast<double>(sample) * sample;
-        const auto rms = mono.empty() ? 0.0 : std::sqrt(sum / static_cast<double>(mono.size()));
-        return AnalysisResult::success("{\"rms\":" + std::to_string(rms) + "}");
-    }
-
   private:
     double frequencyHz() const {
         return normalizedToReal(values_[0], domainOf(sineDescriptor(0)));
@@ -160,11 +153,89 @@ class ReferenceGain final : public Device {
     float gain_ = 0.5f;
 };
 
+/**
+ * @brief Reports what the ABI hands it: channel 0 holds the beat at the block start (-1 without a
+ * tempo), channel 1 the sidechain key (-2 without one). State "slots" sets its parameter count,
+ * "latency" its latency (asking for a rebuild); each reset reports a "resets" count as state.
+ */
+class ReferenceProbe final : public Device {
+  public:
+    void setHost(DeviceHost* host) override {
+        host_ = host;
+    }
+
+    DeviceProperties properties() const override {
+        return {.pluginId = "sdkReferenceProbe",
+                .name = "Reference Probe",
+                .parameterSource = ParameterSource::State,
+                .sidechain = monoAudioSidechain,
+                .outputChannelCount = 2};
+    }
+
+    int latencySamples() const override {
+        return latency_;
+    }
+    std::int64_t tailSamples() const override {
+        return kInfiniteTail;
+    }
+
+    void reset() override {
+        StateNode report;
+        report.setInt("resets", ++resets_);
+        if (host_ != nullptr)
+            host_->stateChanged(std::move(report));
+    }
+
+    void process(ProcessContext& context) override {
+        const double beat = context.tempoMap != nullptr
+                                ? context.tempoMap->beatsAtSeconds(context.timelineStartSeconds)
+                                : -1.0;
+        for (int i = 0; i < context.numSamples(); ++i) {
+            if (context.audio.numChannels() > 0)
+                context.audio.channel(0)[i] = static_cast<float>(beat);
+            if (context.audio.numChannels() > 1)
+                context.audio.channel(1)[i] =
+                    context.sidechain && context.sidechain->numChannels() > 0
+                        ? context.sidechain->channel(0)[i]
+                        : -2.0f;
+        }
+    }
+
+    int parameterCount() const override {
+        return slots_;
+    }
+    ParameterDescriptor parameterDescriptor(int slot) const override {
+        ParameterDescriptor descriptor;
+        descriptor.stableId = "slot_" + std::to_string(slot);
+        descriptor.name = "Slot " + std::to_string(slot);
+        return descriptor;
+    }
+
+    RestoreResult restoreState(const StateNode& state) override {
+        slots_ = std::clamp(state.getInt("slots", 1), 0, 8);
+        const int latency = std::max(0, state.getInt("latency", 0));
+        if (latency != latency_) {
+            latency_ = latency;
+            if (host_ != nullptr)
+                host_->rebuildRequired();
+        }
+        return RestoreResult::success();
+    }
+
+  private:
+    DeviceHost* host_ = nullptr;
+    int slots_ = 1;
+    int latency_ = 0;
+    int resets_ = 0;
+};
+
 constexpr magda::sdk::abi::DeviceFactory kDevices[] = {
     {"sdkReferenceSine",
      []() -> std::unique_ptr<Device> { return std::make_unique<ReferenceSine>(); }},
     {"sdkReferenceGain",
      []() -> std::unique_ptr<Device> { return std::make_unique<ReferenceGain>(); }},
+    {"sdkReferenceProbe",
+     []() -> std::unique_ptr<Device> { return std::make_unique<ReferenceProbe>(); }},
 };
 
 }  // namespace

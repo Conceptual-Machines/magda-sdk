@@ -17,8 +17,9 @@ they link. Natively the call also adds:
   `<type>.manifest.json` and the WAM `<type>.descriptor.json` for every device in the module.
 
 Under Emscripten it adds `<name>_wasm`, written as `<name>.wasm`: a standalone reactor with no
-entry point, exporting the ABI plus `malloc` and `free`, importing only
-`env.emscripten_notify_memory_growth`.
+entry point, importing only `env.emscripten_notify_memory_growth`. It exports
+`magda_module_entry`, `malloc`, `free`, and the flat `magda_wam_*` glue in `hosts/wam/reactor.cpp`,
+which builds the ABI structs in C++ so JavaScript never lays one out.
 
 ## JUCE
 
@@ -44,7 +45,7 @@ outward to whole pixels.
 
 `hosts/wam/js` is the npm package `@conceptual-machines/magda-sdk-wam`:
 
-- `getMagdaDeviceAbi` binds the ABI over the wasm module synchronously, so it also runs in an
+- `getMagdaDeviceAbi` binds the module's glue synchronously, so it also runs in an
   AudioWorklet; its audio path allocates nothing.
 - `getMagdaWamProcessor` is the `WamProcessor`: parameters from the manifest (booleans and
   choices as WAM booleans and choices, the rest normalized floats), MIDI and sysex from the WAM

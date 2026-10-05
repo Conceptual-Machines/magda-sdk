@@ -35,6 +35,10 @@ DeviceManifest buildManifest(const Device& device);
 /// Strict JSON for @p manifest. Nullopt, with @p error set, when it breaks the format's rules.
 std::optional<std::string> writeManifest(const DeviceManifest& manifest, std::string& error);
 
+/// One resolved parameter as it appears in a manifest's "parameters" array.
+std::optional<std::string> writeManifestParameter(const ParameterDescriptor& parameter,
+                                                  std::string& error);
+
 /// Strict inverse of writeManifest. Nullopt, with @p error set, for anything the format refuses.
 std::optional<DeviceManifest> readManifest(std::string_view json, std::string& error);
 
