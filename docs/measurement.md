@@ -51,3 +51,17 @@ Output is frame-major, `numFrames x numMels`.
 The filters are unnormalised triangles between `numMels + 2` edges evenly spaced in mels from
 `fMin` to `fMax`; `melFilterbank(config)` returns them as `numMels x (fftSize / 2 + 1)`.
 `prepare` allocates; `compute` allocates only the padded copy of the input.
+
+## Spectrogram
+
+`Spectrogram.hpp`: a spectrogram to look at, not to feed a model. Each column is a short Hann
+window (5.3 ms by default) zero-padded to a 2048-point FFT, so an attack is a sharp vertical edge
+and the low rows interpolate smoothly. `numRows` bands (128) are spaced logarithmically from
+`lowHz` to `highHz` (30 Hz to 20 kHz), and each row takes the strongest bin in its band, or the
+nearest bin where a band is narrower than one. Levels are dB scaled so a full-scale sine reads
+about 0 dB in its row.
+
+`column(samples, numSamples, centre, rowsDb)` fills one column for the window centred on a sample
+position, reading the signal as zero outside the buffer, so a host can compute any column from a
+block that covers its window. The host chooses the hop, the colour map and the dB range it shows.
+`prepare` allocates; `column` does not.
