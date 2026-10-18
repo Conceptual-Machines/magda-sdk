@@ -1,28 +1,21 @@
 #pragma once
 
-#include <array>
 #include <cstdint>
-#include <magda/sdk/dsp/Random.hpp>
 #include <magda/sdk/sequencer/StepPattern.hpp>
+#include <magda/sdk/sequencer/TimeBend.hpp>
 
 namespace magda::sdk::sequencer {
 
 /**
  * @brief Tempo-synced step clock used by MIDI sequencer devices.
  *
- * Handles transport state tracking, beat position resolution, step timing with
- * swing, and step advancement in multiple direction modes.
+ * Stateless (#22): tick k sits at pattern beat k * rate from beat 0, swung in pattern time, and
+ * plays wherever the time bend's read head crosses it. A tick's step comes from k and the
+ * direction alone, so where a block starts, a loop wrap or an offline render never changes what
+ * plays.
  *
- * Tracks the next step's beat position directly rather than computing from a
- * fixed grid, so rate changes (e.g. from macro modulation) only affect future
- * steps and never cause note drops.
- *
- * Used by composition — each MIDI device that needs step-based timing owns a StepClock
- * and calls processBlock() each audio buffer to get the steps that fire within that block.
- *
- * Engine-neutral since #2313: the block's musical extent arrives as a
- * BlockTiming, so the clock never asks a host for a tempo sequence and both
- * engines' devices drive the same code.
+ * Engine-neutral since #2313: the block's musical extent arrives as a BlockTiming, so the clock
+ * never asks a host for a tempo sequence and both engines' devices drive the same code.
  */
 class StepClock {
   public:
@@ -46,16 +39,16 @@ class StepClock {
     /**
      * @brief One block's musical extent, as the caller's engine resolved it.
      *
-     * The device converts its own host's block into this: beats at the block's
-     * start and end, whether the transport is running, and the block length in
-     * samples (which, with the clock's sample rate, gives an event's offset in
-     * seconds).
+     * Beats at the block's start and end, whether the transport is running, the block length in
+     * samples (which, with the clock's sample rate, gives an event's offset in seconds), and the
+     * meter the time bend's span is counted in.
      */
     struct BlockTiming {
         double startBeat = 0.0;
         double endBeat = 0.0;
         bool isPlaying = false;
         int numSamples = 0;
+        double beatsPerBar = 4.0;
     };
 
     // --- Step event emitted by processBlock ---
@@ -67,115 +60,67 @@ class StepClock {
 
     StepClock();
 
-    /** Reset all state (call on plugin reset or transport stop). */
+    /** @brief Forgets what the UI was shown; the clock itself keeps nothing. */
     void reset();
 
-    /** Seed the Random direction's draws, so a test can pin what a pattern plays. */
+    /** @brief Seeds the Random direction, so a test can pin what a pattern plays. */
     void setRandomSeed(std::int64_t seed) {
-        random_.setSeed(seed);
+        randomSeed_ = static_cast<std::uint64_t>(seed);
     }
 
-    /** Set the sample rate (call from plugin::initialise). */
+    /** @brief Sets the sample rate (call from plugin::initialise). */
     void setSampleRate(double sr) {
         sampleRate_ = sr;
     }
 
     /**
-     * @brief Process one audio block and return step events that fire within it.
+     * @brief The steps that fire in one block, in time order.
      *
-     * @param timing      The block's musical extent and transport state
-     * @param rate        Current rate division
-     * @param direction   Current direction mode
-     * @param swing       Swing amount 0-1
-     * @param numSteps    Number of active steps in the sequence
-     * @param events      Output: step events that fire within this block
-     * @param maxEvents   Maximum events to write
-     * @return            Number of events written
+     * @param swing      0-1, delays every odd tick by up to half a step, in pattern time
+     * @param numSteps   active steps in the sequence
+     * @param bend       the read-head curve the ticks play through
+     * @param quantizeAmount 0-1 pull of the played ticks toward @p quantizeSub divisions of the
+     *                   bend's cycle
+     * @return           events written; past @p maxEvents the latest of a block are dropped
      */
     int processBlock(const BlockTiming& timing, Rate rate, Direction direction, float swing,
-                     int numSteps, StepEvent* events, int maxEvents, float rampDepth = 0.0f,
-                     float rampSkew = 0.0f, int rampCycles = 1, bool hardAngle = false,
+                     int numSteps, StepEvent* events, int maxEvents, const TimeBend& bend = {},
                      float quantizeAmount = 0.0f, int quantizeSub = 16);
 
-    /** Current step index within the sequence (for UI display). */
+    /** @brief The last step played (for UI display). */
     int getCurrentStep() const {
-        return sequenceStep_;
+        return currentStep_;
     }
 
-    /** Whether the clock is actively stepping (transport playing or notes held). */
+    /** @brief The step that plays after the last block, for a gate that has to reach it. */
+    int getNextStep() const {
+        return nextStep_;
+    }
+
+    /** @brief Whether the last block had the transport playing. */
     bool isRunning() const {
         return running_;
     }
 
-    /** Current linear step within the cycle (0..numSteps-1, for ramp curve). */
+    /** @brief The last step's tick within the pattern, 0 to numSteps - 1, for the UI sweep. */
     int getCycleStep() const {
         return cycleStep_;
     }
 
-    /** Convert rate enum to beats per step. */
+    /** @brief The pattern step tick @p tick plays. */
+    int stepForTick(long long tick, int numSteps, Direction direction) const;
+
+    /** @brief Convert rate enum to beats per step. */
     static double rateToBeats(Rate r);
-
-    /** Timing curve (shared by arpeggiator and step sequencer).
-     *  Control point at (skew, skew+depth) in unit square.
-     *  depth > 0 → front-loaded (log-like), depth < 0 → back-loaded (exp-like).
-     *  skew shifts the control point horizontally (-1..1 mapped to 0.01..0.99).
-     *  hardAngle = true → piecewise linear (two straight segments through control point).
-     *  hardAngle = false → quadratic bezier (smooth curve through control point). */
-    static double applyRampCurve(double t, float depth, float skew, bool hardAngle = false);
-
-    /** Apply the timing curve with repeated curve cycles in the unit interval. */
-    static double applyRampCurveWithCycles(double t, float depth, float skew, int cycles = 1,
-                                           bool hardAngle = false);
 
   private:
     double sampleRate_ = 44100.0;
+    std::uint64_t randomSeed_ = 0x853C49E6748FEA9BULL;
 
-    // Transport state
-    bool wasPlaying_ = false;
     bool running_ = false;
-
-    // Timing — tracks the next step beat directly (immune to rate changes)
-    double nextStepBeat_ = -1.0;  // Beat position of the next step to emit (monotonic space)
-    int tickParity_ = 0;          // Even/odd counter for swing
-
-    // Monotonic beat tracking — makes the clock immune to arrangement loop wraps.
-    // Edit beats wrap at arrangement loop boundaries; we accumulate an offset so
-    // the step clock always sees monotonically increasing beats.
-    double beatOffset_ = 0.0;
-    double lastBlockEndBeat_ = 0.0;
-
-    // Sequence state (direction-aware position within the pattern)
-    int sequenceStep_ = 0;          // Current position in the pattern (0..numSteps-1)
-    int cycleStep_ = 0;             // Linear step count within current cycle (for ramp curve)
-    double cycleOriginBeat_ = 0.0;  // Beat position where current cycle started (monotonic space)
-    bool goingUp_ = true;           // For ping-pong direction
-
-    // Random
-    sdk::Lcg48Random random_;
-
-    // Steps whose swung or quantized position landed beyond the block that
-    // scheduled them. Swing offsets a tick by up to half a step, which at a
-    // typical block size is several blocks away; before #2313 such a tick was
-    // simply not emitted, so any swing above a few percent silently dropped
-    // half the pattern. They are held here and emitted by the block that
-    // actually contains them.
-    //
-    // One entry per step of the longest pattern. Swing alone can only push a
-    // tick within half a step of the block end, but quantize snaps toward a
-    // grid that may be far coarser than the rate, so a big offline block can
-    // hold several ticks at once - and an entry that does not fit here is a
-    // step the pattern loses, which is the defect this queue exists to fix
-    // (#2335).
-    struct PendingStep {
-        int stepIndex = 0;
-        double beat = 0.0;
-    };
-    static constexpr int kMaxPending = kMaxSteps;
-    std::array<PendingStep, kMaxPending> pending_{};
-    int pendingCount_ = 0;
-
-    /** Advance step index based on direction. */
-    int advanceStep(int current, int numSteps, Direction dir);
+    int currentStep_ = 0;
+    int nextStep_ = 0;
+    int cycleStep_ = 0;
 };
 
 }  // namespace magda::sdk::sequencer

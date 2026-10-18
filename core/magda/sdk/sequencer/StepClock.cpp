@@ -1,26 +1,43 @@
 #include <algorithm>
-#include <cassert>
+#include <array>
 #include <cmath>
 #include <cstddef>
-#include <magda/sdk/sequencer/RampCurve.hpp>
 #include <magda/sdk/sequencer/StepClock.hpp>
 
 namespace magda::sdk::sequencer {
 
+namespace {
+
+/// Ticks one block can hold before ordering; a curve near vertical rolls many into one block.
+constexpr int kMaxCandidates = 256;
+
+struct Candidate {
+    double beat = 0.0;
+    long long tick = 0;
+};
+
+std::uint64_t mix(std::uint64_t x) {
+    // splitmix64's finaliser.
+    x += 0x9E3779B97F4A7C15ULL;
+    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    x = (x ^ (x >> 27)) * 0x94D049BB133111EBULL;
+    return x ^ (x >> 31);
+}
+
+long long positiveMod(long long value, long long divisor) {
+    const long long r = value % divisor;
+    return r < 0 ? r + divisor : r;
+}
+
+}  // namespace
+
 StepClock::StepClock() = default;
 
 void StepClock::reset() {
-    nextStepBeat_ = -1.0;
-    tickParity_ = 0;
-    sequenceStep_ = 0;
-    cycleStep_ = 0;
-    cycleOriginBeat_ = 0.0;
-    goingUp_ = true;
-    wasPlaying_ = false;
     running_ = false;
-    beatOffset_ = 0.0;
-    lastBlockEndBeat_ = 0.0;
-    pendingCount_ = 0;
+    currentStep_ = 0;
+    nextStep_ = 0;
+    cycleStep_ = 0;
 }
 
 double StepClock::rateToBeats(Rate r) {
@@ -50,255 +67,121 @@ double StepClock::rateToBeats(Rate r) {
     }
 }
 
-double StepClock::applyRampCurve(double t, float depth, float skew, bool hardAngle) {
-    // The curve lives in RampCurve.hpp so the arpeggiator shares it (#2299).
-    return ramp_curve::applyRampCurve(t, depth, skew, hardAngle);
-}
-
-double StepClock::applyRampCurveWithCycles(double t, float depth, float skew, int cycles,
-                                           bool hardAngle) {
-    return ramp_curve::applyRampCurveWithCycles(t, depth, skew, cycles, hardAngle);
-}
-
-int StepClock::advanceStep(int current, int numSteps, Direction dir) {
+int StepClock::stepForTick(long long tick, int numSteps, Direction direction) const {
     if (numSteps <= 1)
         return 0;
-
-    switch (dir) {
+    const auto n = static_cast<long long>(numSteps);
+    switch (direction) {
         case Direction::Forward:
-            return (current + 1) % numSteps;
-
+            return static_cast<int>(positiveMod(tick, n));
         case Direction::Reverse:
-            return (current - 1 + numSteps) % numSteps;
-
-        case Direction::PingPong:
-            if (goingUp_) {
-                if (current >= numSteps - 1) {
-                    goingUp_ = false;
-                    return current - 1;
-                }
-                return current + 1;
-            } else {
-                if (current <= 0) {
-                    goingUp_ = true;
-                    return current + 1;
-                }
-                return current - 1;
-            }
-
+            return static_cast<int>(positiveMod(-tick, n));
+        case Direction::PingPong: {
+            const long long period = 2 * n - 2;
+            const long long m = positiveMod(tick, period);
+            return static_cast<int>(m < n ? m : period - m);
+        }
         case Direction::Random:
-            return random_.nextInt(numSteps);
-
-        default:
-            return (current + 1) % numSteps;
+            return static_cast<int>(mix(randomSeed_ ^ mix(static_cast<std::uint64_t>(tick))) %
+                                    static_cast<std::uint64_t>(n));
     }
+    return static_cast<int>(positiveMod(tick, n));
 }
 
 int StepClock::processBlock(const BlockTiming& timing, Rate rate, Direction direction, float swing,
-                            int numSteps, StepEvent* events, int maxEvents, float rampDepth,
-                            float rampSkew, int rampCycles, bool hardAngle, float quantizeAmount,
-                            int quantizeSub) {
-    if (numSteps <= 0 || maxEvents <= 0)
+                            int numSteps, StepEvent* events, int maxEvents, const TimeBend& bend,
+                            float quantizeAmount, int quantizeSub) {
+    running_ = timing.isPlaying;
+    if (!timing.isPlaying || numSteps <= 0 || maxEvents <= 0)
         return 0;
 
-    // --- Handle transport transitions ---
-    if (timing.isPlaying && !wasPlaying_) {
-        reset();
-        wasPlaying_ = true;
-        running_ = true;
-    } else if (!timing.isPlaying && wasPlaying_) {
-        reset();
-        return 0;
-    }
-
-    // Only run when transport is playing
-    if (!timing.isPlaying) {
-        running_ = false;
-        return 0;
-    }
-
-    running_ = true;
-
-    // A pattern can shrink under a running clock - the faceplate's STEPS slider
-    // is a live edit - and the position has to come back inside it. The cursor
-    // was emitted unwrapped, so shortening a 32-step pattern to 8 while playing
-    // step 20 played step 20, a step the user had just hidden; ping-pong then
-    // walked DOWN through 19, 18, ... and kept sounding hidden steps until the
-    // index happened to fall inside the pattern again. Steps already queued
-    // carry indices from before the shrink and wrap the same way, so a held
-    // tick plays the step the shortened pattern has in that position (#2335).
-    if (sequenceStep_ >= numSteps)
-        sequenceStep_ %= numSteps;
-    if (cycleStep_ >= numSteps)
-        cycleStep_ %= numSteps;
-    for (int i = 0; i < pendingCount_; ++i) {
-        auto& pending = pending_[static_cast<size_t>(i)];
-        if (pending.stepIndex >= numSteps)
-            pending.stepIndex %= numSteps;
-    }
-
-    // --- Beat positions for this block, as the caller's engine resolved them ---
-    double blockStartBeat = timing.startBeat;
-    double blockEndBeat = timing.endBeat;
-
-    if (blockEndBeat <= blockStartBeat)
+    const double t0 = timing.startBeat;
+    const double t1 = timing.endBeat;
+    if (!(t1 > t0))
         return 0;
 
-    // Apply monotonic offset so the step clock is immune to arrangement loop
-    // wraps. Edit beats wrap at loop boundaries (e.g. 8→0); we detect backward
-    // jumps and accumulate an offset so beats always increase.
-    if (lastBlockEndBeat_ > 0.0 && blockStartBeat < lastBlockEndBeat_ - 0.01) {
-        beatOffset_ += lastBlockEndBeat_ - blockStartBeat;
-    }
-    lastBlockEndBeat_ = blockEndBeat;
-    blockStartBeat += beatOffset_;
-    blockEndBeat += beatOffset_;
+    const double stepBeats = rateToBeats(rate);
+    const double swingBeats = static_cast<double>(std::clamp(swing, 0.0f, 1.0f)) * stepBeats * 0.5;
+    const double cycleBeats = bend.cycleBeats(timing.beatsPerBar);
+    const double quantize = std::clamp(static_cast<double>(quantizeAmount), 0.0, 1.0);
+    const double grid =
+        quantize > 0.0 && quantizeSub > 0 ? cycleBeats / static_cast<double>(quantizeSub) : 0.0;
+    // Quantize moves a hit by up to half its grid, so the hits it can pull in lie that far out.
+    const double reach = grid > 0.0 ? 0.5 * grid * quantize : 0.0;
 
-    double stepBeats = rateToBeats(rate);
-    double cycleBeats = stepBeats * numSteps;
-    double blockDurationSecs = static_cast<double>(timing.numSamples) / sampleRate_;
-    bool hasRamp = std::abs(rampDepth) > 0.001f && numSteps > 1;
-
-    // Helper: compute the warped duration for a given step in the cycle
-    auto warpedStepDuration = [&](int stepInCycle) -> double {
-        if (!hasRamp)
-            return stepBeats;
-        double t0 = static_cast<double>(stepInCycle) / static_cast<double>(numSteps);
-        double t1 = static_cast<double>(stepInCycle + 1) / static_cast<double>(numSteps);
-        return (applyRampCurveWithCycles(t1, rampDepth, rampSkew, rampCycles, hardAngle) -
-                applyRampCurveWithCycles(t0, rampDepth, rampSkew, rampCycles, hardAngle)) *
-               cycleBeats;
+    // Ticks whose swung pattern beat is in [lo, hi].
+    const auto ticks = [&](double lo, double hi, const auto& visit) {
+        for (auto k = static_cast<long long>(std::floor((lo - swingBeats) / stepBeats)) - 1;
+             static_cast<double>(k) * stepBeats <= hi; ++k) {
+            const bool odd = k % 2 != 0;
+            visit(static_cast<double>(k) * stepBeats + (odd ? swingBeats : 0.0), k);
+        }
+    };
+    const auto quantized = [&](double beat) {
+        return grid > 0.0 ? beat + (std::round(beat / grid) * grid - beat) * quantize : beat;
     };
 
-    // Initialise on first block — quantise to the nearest cycle grid position
-    if (nextStepBeat_ < 0.0) {
-        cycleOriginBeat_ = std::floor(blockStartBeat / cycleBeats) * cycleBeats;
-        cycleStep_ = 0;
-        if (hasRamp) {
-            // Find which step in the cycle we're at
-            double beatInCycle = blockStartBeat - cycleOriginBeat_;
-            double accum = 0.0;
-            for (int i = 0; i < numSteps; ++i) {
-                double dur = warpedStepDuration(i);
-                if (accum + dur > beatInCycle + 1e-10) {
-                    cycleStep_ = i;
-                    nextStepBeat_ = cycleOriginBeat_ + accum;
-                    break;
-                }
-                accum += dur;
-            }
-            if (nextStepBeat_ < 0.0)
-                nextStepBeat_ = cycleOriginBeat_ + cycleBeats;
-        } else {
-            nextStepBeat_ = std::floor(blockStartBeat / stepBeats) * stepBeats;
+    std::array<Candidate, kMaxCandidates> found{};
+    int count = 0;
+    forEachBentHit(bend, cycleBeats, t0 - reach, t1 + reach, ticks,
+                   [&](double real, long long tick) {
+                       const double beat = quantized(real);
+                       if (beat >= t0 && beat < t1 && count < kMaxCandidates)
+                           found[static_cast<std::size_t>(count++)] = {beat, tick};
+                   });
+
+    // A falling run emits later ticks first, and quantize can reorder; insertion sort keeps ties
+    // in emission order and does not allocate.
+    for (int i = 1; i < count; ++i) {
+        const auto held = found[static_cast<std::size_t>(i)];
+        int j = i - 1;
+        while (j >= 0 && found[static_cast<std::size_t>(j)].beat > held.beat) {
+            found[static_cast<std::size_t>(j + 1)] = found[static_cast<std::size_t>(j)];
+            --j;
         }
+        found[static_cast<std::size_t>(j + 1)] = held;
     }
 
-    // Catch up if we fell behind (e.g. transport jumped forward)
-    int catchUp = 0;
-    while (nextStepBeat_ < blockStartBeat && catchUp < numSteps * 2) {
-        nextStepBeat_ += warpedStepDuration(cycleStep_);
-        sequenceStep_ = advanceStep(sequenceStep_, numSteps, direction);
-        cycleStep_ = (cycleStep_ + 1) % numSteps;
-        if (cycleStep_ == 0)
-            cycleOriginBeat_ = nextStepBeat_;
-        ++tickParity_;
-        ++catchUp;
-    }
-    // If still behind, re-anchor
-    if (nextStepBeat_ < blockStartBeat) {
-        cycleOriginBeat_ = std::floor(blockStartBeat / cycleBeats) * cycleBeats;
-        cycleStep_ = 0;
-        nextStepBeat_ = cycleOriginBeat_;
-        while (nextStepBeat_ < blockStartBeat) {
-            nextStepBeat_ += warpedStepDuration(cycleStep_);
-            cycleStep_ = (cycleStep_ + 1) % numSteps;
-        }
-        if (cycleStep_ == 0)
-            cycleOriginBeat_ = nextStepBeat_;
-    }
-
-    // --- Emit step events within this block ---
-    int eventCount = 0;
-
-    // The block's last sample, so an event clamped to the block's end still
-    // lands inside it rather than one sample past.
+    const double blockSecs = static_cast<double>(timing.numSamples) / sampleRate_;
     const double lastSampleSecs =
         timing.numSamples > 1 ? static_cast<double>(timing.numSamples - 1) / sampleRate_ : 0.0;
-
-    // Write one event, clamping a position outside the block to its nearest
-    // edge rather than losing the step.
-    auto emit = [&](int stepIndex, double beatPosition) {
-        const double clamped = std::clamp(beatPosition, blockStartBeat, blockEndBeat);
-        const double frac = (clamped - blockStartBeat) / (blockEndBeat - blockStartBeat);
-        events[eventCount] = {.stepIndex = stepIndex,
-                              .beatPosition = clamped,
-                              .timeInBlock = std::min(frac * blockDurationSecs, lastSampleSecs)};
-        ++eventCount;
-    };
-
-    // Steps a previous block scheduled past its own end (swing, quantize) fire
-    // in the block that contains them. One that is due here but has no room
-    // left in the caller's buffer stays pending rather than being dropped: the
-    // next block emits it, clamped to its start (#2335).
-    int stillPending = 0;
-    for (int i = 0; i < pendingCount_; ++i) {
-        const auto step = pending_[static_cast<size_t>(i)];
-        if (step.beat < blockEndBeat && eventCount < maxEvents)
-            emit(step.stepIndex, step.beat);
-        else
-            pending_[static_cast<size_t>(stillPending++)] = step;
+    const int written = std::min(count, maxEvents);
+    for (int i = 0; i < written; ++i) {
+        const auto& hit = found[static_cast<std::size_t>(i)];
+        const double frac = (hit.beat - t0) / (t1 - t0);
+        events[i] = {.stepIndex = stepForTick(hit.tick, numSteps, direction),
+                     .beatPosition = hit.beat,
+                     .timeInBlock = std::min(frac * blockSecs, lastSampleSecs)};
     }
-    pendingCount_ = stillPending;
-
-    while (nextStepBeat_ < blockEndBeat) {
-        // Apply swing to odd ticks
-        double swungBeat = nextStepBeat_;
-        if (tickParity_ % 2 == 1 && swing > 0.0f)
-            swungBeat += static_cast<double>(swing) * warpedStepDuration(cycleStep_) * 0.5;
-
-        // Quantize: snap toward a uniform grid of quantizeSub divisions per cycle
-        if (quantizeAmount > 0.0f && quantizeSub > 0) {
-            double gridSpacing = cycleBeats / static_cast<double>(quantizeSub);
-            double snapped = std::round(swungBeat / gridSpacing) * gridSpacing;
-            swungBeat += (snapped - swungBeat) * static_cast<double>(quantizeAmount);
-        }
-
-        // A tick this block cannot carry waits for one that can. Two ways it
-        // cannot: the tick was swung or quantized past the block's end, or the
-        // caller's array is full.
-        //
-        // The second used to end the loop. That left the cursor behind, and the
-        // next block's catch-up then walked through those ticks without
-        // emitting any of them, so a block holding more steps than the caller's
-        // array - a large offline block past the sequencers' sixteen - lost
-        // every step past the sixteenth outright. The queue already exists for
-        // a tick that cannot be played yet; a full array is that (#2335).
-        const bool fitsInThisBlock = swungBeat < blockEndBeat && eventCount < maxEvents;
-        if (fitsInThisBlock) {
-            emit(sequenceStep_, swungBeat);
-        } else if (pendingCount_ < kMaxPending) {
-            pending_[static_cast<size_t>(pendingCount_++)] = {.stepIndex = sequenceStep_,
-                                                              .beat = swungBeat};
-        } else {
-            // Neither room to play it nor room to hold it, which takes more
-            // ticks in one block than a pattern has steps on top of a full
-            // array. Stop rather than advance past it: the cursor stays here,
-            // so the block that has room starts from this tick.
-            assert(false);
-            break;
-        }
-
-        // Advance to next step
-        nextStepBeat_ += warpedStepDuration(cycleStep_);
-        sequenceStep_ = advanceStep(sequenceStep_, numSteps, direction);
-        cycleStep_ = (cycleStep_ + 1) % numSteps;
-        if (cycleStep_ == 0)
-            cycleOriginBeat_ = nextStepBeat_;
-        ++tickParity_;
+    if (written > 0) {
+        const auto& last = found[static_cast<std::size_t>(written - 1)];
+        currentStep_ = events[written - 1].stepIndex;
+        cycleStep_ = static_cast<int>(positiveMod(last.tick, numSteps));
     }
 
-    return eventCount;
+    // The next hit after the block, which only a block that played needs. The window grows from
+    // two steps to a cycle, since a bend can hold for most of one.
+    if (written > 0) {
+        const double horizon = std::max(2.0 * stepBeats, cycleBeats) + 2.0 * reach;
+        double nextBeat = INFINITY;
+        long long nextTick = 0;
+        for (double ahead = 2.0 * stepBeats; !std::isfinite(nextBeat); ahead *= 2.0) {
+            forEachBentHit(bend, cycleBeats, t1 - reach, t1 + std::min(ahead, horizon) + reach,
+                           ticks, [&](double real, long long tick) {
+                               const double beat = quantized(real);
+                               if (beat >= t1 && beat < nextBeat) {
+                                   nextBeat = beat;
+                                   nextTick = tick;
+                               }
+                           });
+            if (ahead >= horizon)
+                break;
+        }
+        if (std::isfinite(nextBeat))
+            nextStep_ = stepForTick(nextTick, numSteps, direction);
+    }
+
+    return written;
 }
 
 }  // namespace magda::sdk::sequencer

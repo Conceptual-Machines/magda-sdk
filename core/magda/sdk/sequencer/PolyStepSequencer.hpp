@@ -29,11 +29,8 @@ class PolyStepSequencer {
         StepClock::Direction direction = StepClock::Direction::Forward;
         float swing = 0.0f;       ///< 0-1, delays every odd tick
         float gateLength = 0.8f;  ///< 0.05-1, fraction of a step a chord holds
-        float ramp = 0.0f;        ///< -1..1 bezier timing depth
-        float skew = 0.0f;        ///< -1..1 bezier control-point offset
-        int rampCycles = 1;       ///< 1-8 curve repetitions per pattern cycle
-        bool hardAngle = false;   ///< piecewise-linear instead of bezier
-        float quantize = 0.0f;    ///< 0-1 pull of warped steps toward a grid
+        TimeBend bend;            ///< the read-head curve the steps play through
+        float quantize = 0.0f;    ///< 0-1 pull of the played steps toward a grid
         int quantizeSub = 16;     ///< grid subdivisions for quantize
     };
 
@@ -43,7 +40,7 @@ class PolyStepSequencer {
     }
 
     /**
-     * Silence the chord and rewind the clock.
+     * Silence the chord and clear what the UI shows.
      *
      * Sounding notes are released through @p sink at the start of the block;
      * pass nullptr where nothing can be sounding and they are forgotten.
@@ -109,11 +106,6 @@ class PolyStepSequencer {
     int tieHoldCountdown_ = 0;
 
     std::uint32_t rngState_ = 0x9E3779B9U;
-
-    // Timing settings whose change re-anchors the grid, so a change is noticed.
-    int prevRate_ = -1;
-    int prevCycles_ = 1;
-    bool prevHardAngle_ = false;
 };
 
 }  // namespace magda::sdk::sequencer

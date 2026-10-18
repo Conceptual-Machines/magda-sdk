@@ -32,6 +32,9 @@ float preset(CurvePreset shape, float phase);
  */
 float points(std::span<const CurvePointData> curve, float phase);
 
+/** @brief points() in double, through curvemath::evalSegmentPrecise (#22). */
+double pointsPrecise(std::span<const CurvePointData> curve, double phase);
+
 /**
  * @brief The level a modulator of this shape has at @p phase.
  *
