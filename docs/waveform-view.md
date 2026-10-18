@@ -29,7 +29,7 @@ Zoom is pixels per second, from the fit to `kMaxPixelsPerSecond` (5000).
 | Alt-drag or middle-drag | Scrolls. |
 | Cmd-drag | Zooms about the press: up zooms in, on a log scale whose step grows with the zoom and eases off past 80 pixels. |
 | `zoomBy(factor, x)` | Wheel zoom about `x`. |
-| Drag a marker (5 px) | Moves it; the end marker wins over the start, the start over the loop markers. |
+| Drag a marker (5 px) | Moves it; the end marker wins over the start, the start over the loop markers. With `setLoopMarkersFirst(true)` the loop end and start win over both. |
 | Drag the loop bar (top 8 px) | Moves the loop region whole, kept inside the source. |
 | Shift-click | Places the loop start. |
 

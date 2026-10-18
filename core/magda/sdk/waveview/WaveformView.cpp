@@ -88,6 +88,11 @@ WaveformView::Drag WaveformView::hitTest(int x, int y) const {
         return std::abs(mx - secondsToPixel(seconds)) <= kMarkerHitPixels;
     };
 
+    const bool loopFirst = markers_.loop && loopMarkersFirst_;
+    if (loopFirst && near(markers_.loopEnd))
+        return Drag::LoopEnd;
+    if (loopFirst && near(markers_.loopStart))
+        return Drag::LoopStart;
     if (near(markers_.end))
         return Drag::SampleEnd;
     if (near(markers_.start))
