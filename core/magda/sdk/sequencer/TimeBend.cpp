@@ -1,6 +1,8 @@
 #include "magda/sdk/sequencer/TimeBend.hpp"
 
 #include <array>
+#include <charconv>
+#include <cstdio>
 #include <string>
 
 #include "magda/sdk/curve/ModCurve.hpp"
@@ -201,6 +203,86 @@ std::optional<TimeBend> readTimeBend(const StateNode& node) {
     }
 
     // Fewer than two points keeps the diagonal.
+    if (n >= 2)
+        bend.setCurve({read.data(), n});
+    else
+        bend.sanitise();
+    return bend;
+}
+
+namespace {
+
+void appendNumber(std::string& out, double value) {
+    char buffer[32];
+    const auto written = std::snprintf(buffer, sizeof buffer, "%.9g", value);
+    out.append(buffer, static_cast<std::size_t>(std::max(written, 0)));
+}
+
+/// Reads one number up to @p separator, consuming it; false on anything else.
+template <typename T> bool takeNumber(std::string_view& text, char separator, T& value) {
+    const auto end = text.find(separator);
+    const auto field = text.substr(0, end);
+    const auto* first = field.data();
+    const auto* last = field.data() + field.size();
+    if constexpr (std::is_floating_point_v<T>) {
+        double parsed = 0.0;
+        const auto [ptr, ec] = std::from_chars(first, last, parsed);
+        if (ec != std::errc{} || ptr != last || !std::isfinite(parsed))
+            return false;
+        value = static_cast<T>(parsed);
+    } else {
+        const auto [ptr, ec] = std::from_chars(first, last, value);
+        if (ec != std::errc{} || ptr != last)
+            return false;
+    }
+    text = end == std::string_view::npos ? std::string_view{} : text.substr(end + 1);
+    return true;
+}
+
+}  // namespace
+
+std::string timeBendToText(const TimeBend& bend) {
+    std::string out;
+    out += bend.on ? "1|" : "0|";
+    appendNumber(out, bend.amount);
+    out += '|' + std::to_string(bend.bars) + '|' + std::to_string(bend.cycles) + '|';
+    for (const auto& p : bend.curve()) {
+        for (const double v : {static_cast<double>(p.phase), static_cast<double>(p.value)}) {
+            appendNumber(out, v);
+            out += ',';
+        }
+        out += std::to_string(p.curveType) + ',';
+        for (const float v : {p.tension, p.outHandleX, p.outHandleY, p.inHandleX}) {
+            appendNumber(out, v);
+            out += ',';
+        }
+        appendNumber(out, p.inHandleY);
+        out += ';';
+    }
+    return out;
+}
+
+std::optional<TimeBend> timeBendFromText(std::string_view text) {
+    TimeBend bend;
+    int on = 0;
+    if (!takeNumber(text, '|', on) || !takeNumber(text, '|', bend.amount) ||
+        !takeNumber(text, '|', bend.bars) || !takeNumber(text, '|', bend.cycles))
+        return std::nullopt;
+    bend.on = on != 0;
+
+    std::array<CurvePointData, kMaxTimeBendPoints> read{};
+    std::size_t n = 0;
+    while (!text.empty()) {
+        if (n == read.size())
+            return std::nullopt;
+        auto& p = read[n++];
+        if (!takeNumber(text, ',', p.phase) || !takeNumber(text, ',', p.value) ||
+            !takeNumber(text, ',', p.curveType) || !takeNumber(text, ',', p.tension) ||
+            !takeNumber(text, ',', p.outHandleX) || !takeNumber(text, ',', p.outHandleY) ||
+            !takeNumber(text, ',', p.inHandleX) || !takeNumber(text, ';', p.inHandleY))
+            return std::nullopt;
+    }
+
     if (n >= 2)
         bend.setCurve({read.data(), n});
     else

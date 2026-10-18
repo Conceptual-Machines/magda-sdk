@@ -227,3 +227,20 @@ TEST_CASE("A single point keeps the diagonal", "[timebend]") {
     REQUIRE(bend->count == 2);
     REQUIRE_FALSE(bend->isActive());
 }
+
+TEST_CASE("A bend survives its text", "[timebend]") {
+    auto bend = shaped(TimeBendShape::ThereAndBack);
+    bend.amount = 0.3f;
+    bend.bars = 2;
+    bend.cycles = 5;
+    bend.points[0].outHandleY = 0.123456789f;
+    bend.points[1].curveType = static_cast<int>(magda::sdk::CurveInterpolation::HardCorner);
+
+    const auto read = timeBendFromText(timeBendToText(bend));
+    REQUIRE(read.has_value());
+    REQUIRE(*read == bend);
+    REQUIRE(timeBendFromText(timeBendToText(TimeBend{})) == TimeBend{});
+
+    for (const auto* bad : {"", "1|x|1|1|", "1|1|1|1|0,0,0,0,0,0,0", "1|1|1|1|0,0,0,0,0,0,0,nan;"})
+        REQUIRE_FALSE(timeBendFromText(bad).has_value());
+}

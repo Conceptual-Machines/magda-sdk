@@ -5,6 +5,7 @@
 #include <cmath>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 
 #include "magda/sdk/curve/CurveTypes.hpp"
@@ -96,6 +97,16 @@ StateNode writeTimeBend(const TimeBend& bend);
 
 /** @brief The bend a @c TimeBend node holds, sanitised; nullopt for any other node. */
 std::optional<TimeBend> readTimeBend(const StateNode& node);
+
+/**
+ * @brief @p bend as one line of text, for a host whose settings are flat properties.
+ *
+ * `on|amount|bars|cycles|x,y,type,tension,outX,outY,inX,inY;...`, every number round-tripping.
+ */
+std::string timeBendToText(const TimeBend& bend);
+
+/** @brief The bend timeBendToText() wrote, sanitised; nullopt for text it did not write. */
+std::optional<TimeBend> timeBendFromText(std::string_view text);
 
 /** @brief Where the read head is at real beat @p beat, in pattern beats. */
 inline double readHeadBeat(const TimeBend& bend, double cycleBeats, double beat) {
