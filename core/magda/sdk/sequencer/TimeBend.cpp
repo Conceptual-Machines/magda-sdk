@@ -2,10 +2,10 @@
 
 #include <array>
 #include <charconv>
-#include <cstdio>
 #include <string>
 
 #include "magda/sdk/curve/ModCurve.hpp"
+#include "magda/sdk/state/detail/NumberText.hpp"
 
 namespace magda::sdk::sequencer {
 
@@ -212,27 +212,29 @@ std::optional<TimeBend> readTimeBend(const StateNode& node) {
 
 namespace {
 
-void appendNumber(std::string& out, double value) {
-    char buffer[32];
-    const auto written = std::snprintf(buffer, sizeof buffer, "%.9g", value);
-    out.append(buffer, static_cast<std::size_t>(std::max(written, 0)));
+void appendNumber(std::string& out, float value) {
+    out += detail::writeFloat(value);
+}
+
+bool isNumberText(std::string_view field) {
+    return !field.empty() && field.find_first_not_of("0123456789+-.eE") == std::string_view::npos;
 }
 
 /// Reads one number up to @p separator, consuming it; false on anything else.
 template <typename T> bool takeNumber(std::string_view& text, char separator, T& value) {
     const auto end = text.find(separator);
     const auto field = text.substr(0, end);
-    const auto* first = field.data();
-    const auto* last = field.data() + field.size();
+    if (!isNumberText(field))
+        return false;
     if constexpr (std::is_floating_point_v<T>) {
-        double parsed = 0.0;
-        const auto [ptr, ec] = std::from_chars(first, last, parsed);
-        if (ec != std::errc{} || ptr != last || !std::isfinite(parsed))
+        // Floating from_chars is not on every deployment target this builds for.
+        const double parsed = detail::parseNumberToken(field);
+        if (!std::isfinite(parsed))
             return false;
         value = static_cast<T>(parsed);
     } else {
-        const auto [ptr, ec] = std::from_chars(first, last, value);
-        if (ec != std::errc{} || ptr != last)
+        const auto [ptr, ec] = std::from_chars(field.data(), field.data() + field.size(), value);
+        if (ec != std::errc{} || ptr != field.data() + field.size())
             return false;
     }
     text = end == std::string_view::npos ? std::string_view{} : text.substr(end + 1);
@@ -247,7 +249,7 @@ std::string timeBendToText(const TimeBend& bend) {
     appendNumber(out, bend.amount);
     out += '|' + std::to_string(bend.bars) + '|' + std::to_string(bend.cycles) + '|';
     for (const auto& p : bend.curve()) {
-        for (const double v : {static_cast<double>(p.phase), static_cast<double>(p.value)}) {
+        for (const float v : {p.phase, p.value}) {
             appendNumber(out, v);
             out += ',';
         }

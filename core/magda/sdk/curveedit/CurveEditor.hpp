@@ -139,6 +139,12 @@ class CurveEditor {
     void setDrawContentBorder(bool draw) {
         drawContentBorder_ = draw;
     }
+    /// Whether Shift-click on empty space stamps a step. A time bend turns it off: a step would
+    /// jump the read head.
+    void setAllowSteps(bool allow) {
+        allowSteps_ = allow;
+    }
+
     void setShowCrosshair(bool show) {
         showCrosshair_ = show;
     }
@@ -266,6 +272,7 @@ class CurveEditor {
     float loopEnd_ = 1.0f;
     bool drawContentBorder_ = false;
     bool showCrosshair_ = false;
+    bool allowSteps_ = true;
     bool indicatorVisible_ = false;
     float indicatorPhase_ = 0.0f;
     float indicatorValue_ = 0.0f;

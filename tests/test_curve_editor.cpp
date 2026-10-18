@@ -298,3 +298,20 @@ TEST_CASE("Refreshing with the same count keeps identities; a new curve does not
     CHECK(editor.selection().empty());
     CHECK(editor.points().size() == 2);
 }
+
+TEST_CASE("CurveEditor stamps no step when steps are off", "[curveedit]") {
+    magda::sdk::CurveEditor editor;
+    editor.setSize(200, 100);
+    editor.setPoints(std::vector<magda::sdk::CurvePointData>{{.phase = 0.0f, .value = 0.0f},
+                                                             {.phase = 1.0f, .value = 1.0f}});
+    editor.setAllowSteps(false);
+
+    magda::sdk::CurveEditorPointer pointer{.x = 100.0f, .y = 30.0f};
+    pointer.mods.shift = true;
+    editor.pointerDown(pointer);
+    const auto response = editor.pointerUp(pointer);
+
+    REQUIRE(response.commit != magda::sdk::CurveEditorResponse::Commit::StampStep);
+    for (const auto& p : editor.points())
+        REQUIRE(p.curveType != static_cast<int>(magda::sdk::CurveInterpolation::Step));
+}
