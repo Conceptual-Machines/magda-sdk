@@ -139,29 +139,45 @@ void forEachBentHit(const TimeBend& bend, double cycleBeats, double t0, double t
     }
 
     // Per grid cell the head is the line from ra to rb; a crossing plays at its real time on it,
-    // half-open in the direction of travel so a boundary event fires once per pass.
+    // half-open in the direction of travel so a boundary event fires once per pass. A cell is
+    // split at the curve's own points, so a straight segment crosses exactly where it is drawn.
     const double dt = cycleBeats / kTimeBendSegments;
+    const auto curve = bend.curve();
     const auto i0 = static_cast<long long>(std::floor(t0 / dt));
     const auto i1 = static_cast<long long>(std::floor(t1 / dt));
+
+    const auto crossings = [&](double origin, double xa, double xb) {
+        const double ra = origin + bend.read(xa) * cycleBeats;
+        const double rb = origin + bend.read(xb) * cycleBeats;
+        if (std::abs(rb - ra) < 1.0e-12)
+            return;
+        const double ta = origin + xa * cycleBeats;
+        const double span = (xb - xa) * cycleBeats;
+        const bool rising = rb > ra;
+        sources(std::min(ra, rb), std::max(ra, rb), [&](double position, const auto&... item) {
+            if (rising ? !(position >= ra && position < rb) : !(position > rb && position <= ra))
+                return;
+            const double real = ta + (position - ra) / (rb - ra) * span;
+            if (real >= t0 && real < t1)
+                emit(real, item...);
+        });
+    };
+
     for (long long i = i0; i <= i1; ++i) {
         const auto cycle = static_cast<long long>(
             std::floor(static_cast<double>(i) / static_cast<double>(kTimeBendSegments)));
         const auto segment = static_cast<double>(i - cycle * kTimeBendSegments);
         const double origin = static_cast<double>(cycle) * cycleBeats;
-        const double ra = origin + bend.read(segment / kTimeBendSegments) * cycleBeats;
-        const double rb = origin + bend.read((segment + 1.0) / kTimeBendSegments) * cycleBeats;
-        if (std::abs(rb - ra) < 1.0e-12)
-            continue;
-
-        const double ta = static_cast<double>(i) * dt;
-        const bool rising = rb > ra;
-        sources(std::min(ra, rb), std::max(ra, rb), [&](double position, const auto&... item) {
-            if (rising ? !(position >= ra && position < rb) : !(position > rb && position <= ra))
-                return;
-            const double real = ta + (position - ra) / (rb - ra) * dt;
-            if (real >= t0 && real < t1)
-                emit(real, item...);
-        });
+        const double xb = (segment + 1.0) / kTimeBendSegments;
+        double xa = segment / kTimeBendSegments;
+        for (const auto& point : curve) {
+            const auto x = static_cast<double>(point.phase);
+            if (x > xa && x < xb) {
+                crossings(origin, xa, x);
+                xa = x;
+            }
+        }
+        crossings(origin, xa, xb);
     }
 }
 

@@ -244,3 +244,20 @@ TEST_CASE("A bend survives its text", "[timebend]") {
     for (const auto* bad : {"", "1|x|1|1|", "1|1|1|1|0,0,0,0,0,0,0", "1|1|1|1|0,0,0,0,0,0,0,nan;"})
         REQUIRE_FALSE(timeBendFromText(bad).has_value());
 }
+
+TEST_CASE("A straight segment is crossed exactly where it is drawn", "[timebend]") {
+    // A breakpoint off the crossing grid: step 1 of a 3-step cycle must play at x = 0.3.
+    const TimeBendKnot knots[] = {{0.0f, 0.0f}, {0.3f, 1.0f / 3.0f}, {1.0f, 1.0f}};
+    auto bend = makeTimeBend(knots);
+    bend.on = true;
+    std::vector<double> played;
+    forEachBentHit(
+        bend, 6.0, 0.0, 6.0,
+        [](double lo, double hi, const auto& visit) {
+            for (int k = static_cast<int>(std::floor(lo / 2.0)) - 1; k * 2.0 <= hi; ++k)
+                visit(k * 2.0, k);
+        },
+        [&](double real, int) { played.push_back(real); });
+    REQUIRE(played.size() == 3);
+    REQUIRE(played[1] == Approx(1.8).margin(1e-6));
+}
