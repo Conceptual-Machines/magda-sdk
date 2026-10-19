@@ -261,3 +261,79 @@ TEST_CASE("A straight segment is crossed exactly where it is drawn", "[timebend]
     REQUIRE(played.size() == 3);
     REQUIRE(played[1] == Approx(1.8).margin(1e-6));
 }
+
+namespace {
+
+/// The groove engine magda-core played before grooves were bends: written beat to played beat.
+double groovyBeat(const std::vector<float>& lateness, int notesPerBeat, double beat) {
+    const auto n = static_cast<long long>(lateness.size());
+    const double grid = notesPerBeat;
+    const double step = std::floor(beat * grid);
+    const double offset = beat * grid - step;
+    const auto index = ((static_cast<long long>(step) % n) + n) % n;
+    const double l = lateness[static_cast<std::size_t>(index)];
+    const double next = lateness[static_cast<std::size_t>((index + 1) % n)];
+    return (step + 0.5 * l + offset * (1.0 + 0.5 * (next - l))) / grid;
+}
+
+/// Where @p bend plays a note written at @p beat, the first time in [0, 16).
+double bentBeat(const TimeBend& bend, double beatsPerBar, double beat) {
+    double played = NAN;
+    forEachBentHit(
+        bend, bend.cycleBeats(beatsPerBar), 0.0, 16.0,
+        [beat](double lo, double hi, const auto& visit) {
+            if (beat >= lo && beat <= hi)
+                visit(beat, 0);
+        },
+        [&](double real, int) {
+            if (std::isnan(played))
+                played = real;
+        });
+    return played;
+}
+
+void checkGroove(const std::vector<float>& lateness, int notesPerBeat, double beatsPerBar) {
+    const auto bend = grooveTimeBend(lateness, notesPerBeat, beatsPerBar);
+    REQUIRE(bend.has_value());
+    // Grid steps and the points between them, over two bars, clear of the window's ends.
+    for (double beat = 0.125; beat < 8.0; beat += 1.0 / 24.0) {
+        INFO("beat " << beat);
+        REQUIRE(bentBeat(*bend, beatsPerBar, beat) ==
+                Approx(groovyBeat(lateness, notesPerBeat, beat)).margin(1e-6));
+    }
+}
+
+}  // namespace
+
+TEST_CASE("A swing plays as a time bend", "[timebend][groove]") {
+    checkGroove({0.0f, 0.66f}, 2, 4.0);
+    checkGroove({0.0f, 1.0f}, 4, 4.0);
+    checkGroove({0.0f, 0.4f}, 1, 4.0);
+}
+
+TEST_CASE("Pushes, pulls and slow-fast grooves play as time bends", "[timebend][groove]") {
+    checkGroove({0.0f, 1.0f, 0.0f, 1.0f, -0.5f, 1.0f, 0.0f, 1.0f}, 4, 4.0);
+    checkGroove({0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f}, 2, 4.0);
+    checkGroove({0.0f, 0.5f, 1.0f, 0.5f}, 1, 4.0);
+}
+
+TEST_CASE("A groove with a late downbeat holds, then plays it late", "[timebend][groove]") {
+    checkGroove({0.046f, -0.033f, -0.026f, 0.039f, -0.039f, 0.0f, 0.026f, -0.046f, 0.033f, -0.053f,
+                 0.039f, -0.046f, -0.033f, 0.039f, 0.053f, -0.046f},
+                2, 4.0);
+}
+
+TEST_CASE("A groove fits another meter by repeating inside one curve", "[timebend][groove]") {
+    // A 2-beat groove in 3/4: two repeats make a 4-beat cycle, which four bars of 3 over 3
+    // cycles divide.
+    checkGroove({0.0f, 0.25f, 0.5f, 0.25f}, 2, 3.0);
+}
+
+TEST_CASE("A groove carries its amount, and an empty one is no bend", "[timebend][groove]") {
+    const std::vector<float> swing{0.0f, 0.66f};
+    const auto half = grooveTimeBend(swing, 2, 4.0, 0.5f);
+    REQUIRE(half.has_value());
+    REQUIRE(half->on);
+    REQUIRE(half->amount == 0.5f);
+    REQUIRE_FALSE(grooveTimeBend({}, 2, 4.0).has_value());
+}

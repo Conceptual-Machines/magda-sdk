@@ -40,6 +40,16 @@ Rhythmica's segment to within 1e-6 (the handle is stored as a float). `TimeBendS
 starting shapes: Straight, Rush, Drag, Rush then drag, Hold then catch up, Backwards, There and
 back.
 
+## Grooves
+
+`grooveTimeBend(lateness, notesPerBeat, beatsPerBar, amount)` spells a groove as a bend: a
+shift per grid step (-1 to 1 of a step), step `k` playing at `(k + lateness / 2) / notesPerBeat`
+beats with the points between steps moving with them, which is the groove map magda-core played
+before grooves were bends. Step `k` of an `n`-step cycle becomes the point
+`((k + lateness / 2) / n, k / n)`; the cycle repeats the groove until a span and a cycle count
+divide into it. A late downbeat is a hold at the cycle's start. An early one cannot be spelled,
+since the head would have to cross the cycle's top, and is read as on the grid.
+
 ## State
 
 `writeTimeBend` / `readTimeBend` use a `TimeBend` node with `on`, `amount`, `bars` and `cycles`,
