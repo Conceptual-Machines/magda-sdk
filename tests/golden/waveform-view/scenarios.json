@@ -60,6 +60,46 @@
         {"type": "down", "x": 90, "y": 4}, {"type": "drag", "x": 270, "y": 4},
         {"type": "up", "x": 270, "y": 4}
       ]
+    },
+    {
+      "name": "chrome-seconds", "size": [300, 120], "chrome": {"ruler": true, "scrollBar": true},
+      "markers": {"start": 0.25, "end": 1.6, "loop": true, "loopStart": 0.5, "loopEnd": 1.2},
+      "playhead": 0.9,
+      "events": [{"type": "zoom", "x": 150, "factor": 3.0}]
+    },
+    {
+      "name": "chrome-samples", "size": [300, 120], "chrome": {"ruler": true, "units": "samples"},
+      "events": [{"type": "zoom", "x": 100, "factor": 40.0}]
+    },
+    {
+      "name": "ruler-drag-zoom", "size": [300, 120], "chrome": {"ruler": true, "scrollBar": true},
+      "events": [
+        {"type": "down", "x": 150, "y": 8}, {"type": "drag", "x": 150, "y": -30},
+        {"type": "up", "x": 150, "y": -30}
+      ]
+    },
+    {
+      "name": "scroll-bar-drag-thumb", "size": [300, 120], "chrome": {"scrollBar": true},
+      "events": [
+        {"type": "zoom", "x": 0, "factor": 4.0},
+        {"type": "down", "x": 30, "y": 115}, {"type": "drag", "x": 150, "y": 115},
+        {"type": "up", "x": 150, "y": 115}
+      ]
+    },
+    {
+      "name": "scroll-bar-drag-edge", "size": [300, 120], "chrome": {"scrollBar": true},
+      "events": [
+        {"type": "down", "x": 298, "y": 115}, {"type": "drag", "x": 120, "y": 115},
+        {"type": "up", "x": 120, "y": 115}
+      ]
+    },
+    {
+      "name": "chrome-drag-loop-region", "size": [300, 120], "chrome": {"ruler": true},
+      "markers": {"loop": true, "loopStart": 0.4, "loopEnd": 1.0},
+      "events": [
+        {"type": "down", "x": 90, "y": 22}, {"type": "drag", "x": 270, "y": 22},
+        {"type": "up", "x": 270, "y": 22}
+      ]
     }
   ]
 }

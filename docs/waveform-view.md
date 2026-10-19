@@ -13,11 +13,13 @@ one channel of samples exactly; `PeakDataWaveformSource` reads stored peaks (doc
 
 | Call | Purpose |
 |---|---|
-| `setSize(w, h)` | The pane. Zoom never goes below fitting the whole source. |
+| `setSize(w, h)` | The pane, chrome included. Zoom never goes below fitting the whole source. |
 | `setSource(source, seconds)` | Fits the source to the width and scrolls home. |
 | `setGain(g)` | Scales the drawn peaks. |
 | `setMarkers(m)` / `markers()` | Start, end, and the loop region with its on flag. |
 | `setPlayhead(s)` | Drawn while above zero. |
+| `setChrome(c)` | Optional bands, both off by default: a time ruler above the wave (18 px, in seconds or samples) and a zoom/scroll bar below it (10 px). |
+| `overRuler(p)` | Whether a pointer is over the ruler, for a host that puts a menu there. |
 | `secondsToPixel`, `pixelToSeconds` | Pane mapping. A time draws no further right than the last column, so an end marker stays visible; a pixel reads back inside the source. |
 
 Zoom is pixels per second, from the fit to `kMaxPixelsPerSecond` (5000).
@@ -32,6 +34,9 @@ Zoom is pixels per second, from the fit to `kMaxPixelsPerSecond` (5000).
 | Drag a marker (5 px) | Moves it; the end marker wins over the start, the start over the loop markers. With `setLoopMarkersFirst(true)` the loop end and start win over both. |
 | Drag the loop bar (top 8 px) | Moves the loop region whole, kept inside the source. |
 | Shift-click | Places the loop start. |
+| Drag on the ruler | Zooms as Cmd-drag does. |
+| Drag the scroll bar's thumb | Scrolls. A press on the track centres the thumb there first. |
+| Drag a thumb edge (4 px) | Zooms, keeping the other edge's time in place. |
 
 A response says whether to repaint and whether a marker moved; `cursor(pointer)` names the
 pointer.
@@ -40,7 +45,10 @@ pointer.
 
 Clipped to the pane: the mirrored peak per pixel column (filled at 0.3 alpha, outlined at 0.5 px),
 the loop region and its bar, the start and end markers, the loop markers and the playhead, as
-`waveform`, `loopRegion`, `markerStart`, `markerEnd` and `playhead`.
+`waveform`, `loopRegion`, `markerStart`, `markerEnd` and `playhead`, all between the chrome's
+bands. The ruler is a `surface` strip with a `border` rule, `textDim` ticks on a 1-2-5 step at
+least 80 px apart, and labels on the major ones; the scroll bar is a `border` track with an
+`accent` thumb.
 
 ## Goldens
 
