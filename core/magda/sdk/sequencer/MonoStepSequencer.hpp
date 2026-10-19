@@ -32,11 +32,8 @@ class MonoStepSequencer {
         float gateLength = 0.8f;   ///< 0.05-1, fraction of a step a note holds
         int accentVelocity = 120;  ///< velocity for an accented step
         int normalVelocity = 90;   ///< velocity for an unaccented step
-        float ramp = 0.0f;         ///< -1..1 bezier timing depth
-        float skew = 0.0f;         ///< -1..1 bezier control-point offset
-        int rampCycles = 1;        ///< 1-8 curve repetitions per pattern cycle
-        bool hardAngle = false;    ///< piecewise-linear instead of bezier
-        float quantize = 0.0f;     ///< 0-1 pull of warped steps toward a grid
+        TimeBend bend;             ///< the read-head curve the steps play through
+        float quantize = 0.0f;     ///< 0-1 pull of the played steps toward a grid
         int quantizeSub = 16;      ///< grid subdivisions for quantize
     };
 
@@ -46,7 +43,7 @@ class MonoStepSequencer {
     }
 
     /**
-     * Silence the voice and rewind the clock.
+     * Silence the voice and clear what the UI shows.
      *
      * A note left sounding is released through @p sink at the start of the
      * block; pass nullptr where nothing can be sounding (teardown, or a fresh
@@ -107,11 +104,6 @@ class MonoStepSequencer {
     /// sounding with nothing left to release it (#2335). Re-armed by every tie
     /// step, so an unbroken run of ties never expires.
     int tieHoldCountdown_ = 0;
-
-    // Timing settings whose change re-anchors the grid, so a change is noticed.
-    int prevRate_ = -1;
-    int prevCycles_ = 1;
-    bool prevHardAngle_ = false;
 };
 
 }  // namespace magda::sdk::sequencer

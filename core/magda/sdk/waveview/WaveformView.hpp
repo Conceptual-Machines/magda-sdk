@@ -102,6 +102,11 @@ class WaveformView {
     const WaveformMarkers& markers() const {
         return markers_;
     }
+    /// While on, a loop marker wins a press over a start or end marker under it, for a host
+    /// that edits the loop on its own, when the loop often sits on the sample's ends.
+    void setLoopMarkersFirst(bool first) {
+        loopMarkersFirst_ = first;
+    }
     /// Drawn while above zero.
     void setPlayhead(double seconds) {
         playhead_ = seconds;
@@ -143,6 +148,7 @@ class WaveformView {
     int height_ = 0;
     float gain_ = 1.0f;
     WaveformMarkers markers_;
+    bool loopMarkersFirst_ = false;
     double playhead_ = 0.0;
     double pixelsPerSecond_ = 0.0;
     double scrollSeconds_ = 0.0;

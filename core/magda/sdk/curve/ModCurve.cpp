@@ -67,9 +67,13 @@ float preset(CurvePreset shape, float phase) {
     return phase;
 }
 
-float points(std::span<const CurvePointData> curve, float phase) {
+namespace {
+
+/// points() in @p T: float for a modulator, double for timing.
+template <typename T, typename Segment>
+T readPoints(std::span<const CurvePointData> curve, T phase, Segment segment) {
     if (curve.empty())
-        return 0.5f;
+        return T(0.5);
     if (curve.size() == 1)
         return curve[0].value;
 
@@ -78,7 +82,7 @@ float points(std::span<const CurvePointData> curve, float phase) {
     const CurvePointData* to = nullptr;
 
     for (std::size_t i = 0; i < curve.size(); ++i) {
-        if (curve[i].phase > phase) {
+        if (static_cast<T>(curve[i].phase) > phase) {
             from = i == 0 ? &curve.back() : &curve[i - 1];
             to = i == 0 ? &curve.front() : &curve[i];
             break;
@@ -94,53 +98,70 @@ float points(std::span<const CurvePointData> curve, float phase) {
     if (from->curveType == kStepCurveType)
         return from->value;
 
-    float span = 0.0f;
-    float local = 0.0f;
+    const T fromPhase = from->phase;
+    const T toPhase = to->phase;
+    const T fromValue = from->value;
+    const T toValue = to->value;
 
-    if (to->phase < from->phase) {
+    T span = T(0);
+    T local = T(0);
+
+    if (toPhase < fromPhase) {
         // The wrapping run.
-        span = (1.0f - from->phase) + to->phase;
-        local = phase >= from->phase ? phase - from->phase : (1.0f - from->phase) + phase;
+        span = (T(1) - fromPhase) + toPhase;
+        local = phase >= fromPhase ? phase - fromPhase : (T(1) - fromPhase) + phase;
     } else {
-        span = to->phase - from->phase;
-        local = phase - from->phase;
+        span = toPhase - fromPhase;
+        local = phase - fromPhase;
     }
 
-    const float t = std::clamp(span > 0.0001f ? local / span : 0.0f, 0.0f, 1.0f);
-    const float tension = from->tension;
+    const T t = std::clamp(span > T(0.0001) ? local / span : T(0), T(0), T(1));
+    const T tension = from->tension;
 
-    const auto applyTension = [tension](float input) {
-        if (std::abs(tension) < 0.001f)
+    const auto applyTension = [tension](T input) {
+        if (std::abs(tension) < T(0.001))
             return input;
-        if (tension > 0.0f)
-            return std::pow(input, 1.0f + tension * 2.0f);
-        return 1.0f - std::pow(1.0f - input, 1.0f - tension * 2.0f);
+        if (tension > T(0))
+            return std::pow(input, T(1) + tension * T(2));
+        return T(1) - std::pow(T(1) - input, T(1) - tension * T(2));
     };
 
     if (from->curveType == kHardCornerCurveType) {
         // Two straight runs; the corner is where the handle was dragged, else the midpoint.
-        float cornerT = 0.5f;
-        float cornerValue = from->value + applyTension(0.5f) * (to->value - from->value);
+        T cornerT = T(0.5);
+        T cornerValue = fromValue + applyTension(T(0.5)) * (toValue - fromValue);
 
         if (hasDraggedHandle(*from, *to)) {
-            const float cornerPhase =
-                std::clamp(from->phase + from->outHandleX, from->phase, to->phase);
-            const float raw = (to->phase - from->phase > 0.0001f)
-                                  ? ((cornerPhase - from->phase) / (to->phase - from->phase))
-                                  : 0.5f;
-            cornerT = std::clamp(raw, 0.001f, 0.999f);
-            cornerValue = std::clamp(from->value + from->outHandleY, 0.0f, 1.0f);
+            const T cornerPhase =
+                std::clamp(fromPhase + static_cast<T>(from->outHandleX), fromPhase, toPhase);
+            const T raw = (toPhase - fromPhase > T(0.0001))
+                              ? ((cornerPhase - fromPhase) / (toPhase - fromPhase))
+                              : T(0.5);
+            cornerT = std::clamp(raw, T(0.001), T(0.999));
+            cornerValue = std::clamp(fromValue + static_cast<T>(from->outHandleY), T(0), T(1));
         }
 
         if (t <= cornerT)
-            return from->value + (t / cornerT) * (cornerValue - from->value);
+            return fromValue + (t / cornerT) * (cornerValue - fromValue);
 
-        return cornerValue + ((t - cornerT) / (1.0f - cornerT)) * (to->value - cornerValue);
+        return cornerValue + ((t - cornerT) / (T(1) - cornerT)) * (toValue - cornerValue);
     }
 
     // A bend, through the shared warp.
-    return curvemath::evalSegment(from->value, to->value, from->value + from->outHandleY, tension,
-                                  hasDraggedHandle(*from, *to), t);
+    return segment(fromValue, toValue, fromValue + static_cast<T>(from->outHandleY), tension,
+                   hasDraggedHandle(*from, *to), t);
+}
+
+}  // namespace
+
+float points(std::span<const CurvePointData> curve, float phase) {
+    return readPoints<float>(curve, phase,
+                             [](auto... args) { return curvemath::evalSegment(args...); });
+}
+
+double pointsPrecise(std::span<const CurvePointData> curve, double phase) {
+    return readPoints<double>(curve, phase,
+                              [](auto... args) { return curvemath::evalSegmentPrecise(args...); });
 }
 
 float shapeAt(LFOWaveform wave, CurvePreset shape, std::span<const CurvePointData> curve,

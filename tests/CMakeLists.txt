@@ -44,6 +44,7 @@ add_executable(magda_sdk_tests
     test_spectrogram.cpp
     test_published_pattern.cpp
     test_step_clock.cpp
+    test_time_bend.cpp
     test_step_sequencer_core.cpp
     test_step_sequencer_identity.cpp
     test_taps.cpp

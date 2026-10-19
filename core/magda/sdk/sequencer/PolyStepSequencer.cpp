@@ -6,15 +6,9 @@ namespace magda::sdk::sequencer {
 
 namespace {
 
-/// Step events one block can carry: one pattern's worth.
-///
-/// A block covers a few steps at any sane rate, and sixteen was chosen for
-/// that. But the timing warp can compress several steps into a small span, and
-/// an offline block at a fast rate holds more of them than a callback does, so
-/// the sixteenth was reachable - and past it the clock used to stop and lose
-/// the rest. It holds them now, and this covers a whole pattern so it does not
-/// have to hold them block after block (#2335).
-constexpr int kMaxStepEventsPerBlock = kMaxSteps;
+/// Step events one block can carry: a bend that rolls can put several patterns' worth in one
+/// block, and the clock drops the latest past this (#22).
+constexpr int kMaxStepEventsPerBlock = 4 * kMaxSteps;
 
 /// Blocks a chord may sound with no step event and no pending release before
 /// the stuck-note guard cuts it.
@@ -86,10 +80,6 @@ void PolyStepSequencer::processBlock(const StepClock::BlockTiming& timing,
     const auto direction = params.direction;
     const float swing = std::clamp(params.swing, 0.0f, 1.0f);
     const float gateLength = std::clamp(params.gateLength, 0.05f, 1.0f);
-    const float ramp = std::clamp(params.ramp, -1.0f, 1.0f);
-    const float skew = std::clamp(params.skew, -1.0f, 1.0f);
-    const int rampCycles = std::clamp(params.rampCycles, 1, 8);
-    const bool hardAngle = params.hardAngle;
     const float quantize = std::clamp(params.quantize, 0.0f, 1.0f);
     const int quantizeSub = std::clamp(params.quantizeSub, 16, 512);
 
@@ -105,19 +95,10 @@ void PolyStepSequencer::processBlock(const StepClock::BlockTiming& timing,
     const double stepBeats = StepClock::rateToBeats(rate);
     const int stepDurationSamples = std::max(1, static_cast<int>(stepBeats * samplesPerBeat));
 
-    const int rateIndex = static_cast<int>(rate);
-    if (rateIndex != prevRate_ || rampCycles != prevCycles_ || hardAngle != prevHardAngle_) {
-        killAllNotes(sink, 0.0);
-        clock_.reset();
-        prevRate_ = rateIndex;
-        prevCycles_ = rampCycles;
-        prevHardAngle_ = hardAngle;
-    }
-
     StepClock::StepEvent events[kMaxStepEventsPerBlock]{};
-    const int eventCount = clock_.processBlock(timing, rate, direction, swing, stepCount, events,
-                                               kMaxStepEventsPerBlock, ramp, skew, rampCycles,
-                                               hardAngle, quantize, quantizeSub);
+    const int eventCount =
+        clock_.processBlock(timing, rate, direction, swing, stepCount, events,
+                            kMaxStepEventsPerBlock, params.bend, quantize, quantizeSub);
 
     // A release scheduled by an earlier block, on the mono engine's terms: it
     // yields to a step that arrives first, and never cuts a tie short.
@@ -193,8 +174,7 @@ void PolyStepSequencer::processBlock(const StepClock::BlockTiming& timing,
         // Hold the full step when the next one ties onto this chord - the step
         // the CLOCK will play next, not stepIndex + 1, and a tie without a gate
         // is a rest here as it is in the countdown branch above (#2335).
-        const int nextIndex =
-            (i + 1 < eventCount) ? events[i + 1].stepIndex : clock_.getCurrentStep();
+        const int nextIndex = (i + 1 < eventCount) ? events[i + 1].stepIndex : clock_.getNextStep();
         const auto& nextStep = pattern.step(nextIndex);
         const double gateRatio =
             (nextStep.tie && nextStep.gate) ? 1.0 : static_cast<double>(gateLength);

@@ -119,6 +119,27 @@ TEST_CASE("Markers drag where they are grabbed; shift-click places the loop star
     CHECK(f.view.markers().loopStart == 0.7);
 }
 
+TEST_CASE("Loop markers on the sample's ends win the press once they come first", "[waveview]") {
+    Fixture f;
+    auto markers = f.view.markers();
+    markers.loopStart = 0.0;
+    markers.loopEnd = 1.0;
+    f.view.setMarkers(markers);
+
+    f.view.pointerDown(at(197.0f));
+    f.view.pointerDrag(at(160.0f));
+    f.view.pointerUp(at(160.0f));
+    CHECK(f.view.markers().end == 0.8);
+    CHECK(f.view.markers().loopEnd == 1.0);
+
+    f.view.setLoopMarkersFirst(true);
+    f.view.pointerDown(at(2.0f));
+    f.view.pointerDrag(at(20.0f));
+    f.view.pointerUp(at(20.0f));
+    CHECK(f.view.markers().loopStart == 0.1);
+    CHECK(f.view.markers().start == 0.0);
+}
+
 TEST_CASE("The loop bar moves the region whole, inside the source", "[waveview]") {
     Fixture f;
     CHECK(f.view.cursor(at(75.0f, 3.0f)) == WaveformCursor::DraggingHand);

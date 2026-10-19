@@ -35,10 +35,9 @@ struct Spec {
     float gate = 0.8f;
     int accent = 120;
     int normal = 90;
-    float ramp = 0.0f;
-    float skew = 0.0f;
+    seq::TimeBendShape bend = seq::TimeBendShape::Straight;
     int cycles = 1;
-    bool hardAngle = false;
+    float amount = 1.0f;
     float quantize = 0.0f;
     int quantizeSub = 16;
     int length = 16;
@@ -102,6 +101,14 @@ class Recorder : public seq::NoteSink {
 inline std::uint32_t nextLcg(std::uint32_t& s) {
     s = s * 1664525U + 1013904223U;
     return s >> 8U;
+}
+
+inline seq::TimeBend timeBend(const Spec& spec) {
+    auto bend = seq::makeTimeBend(spec.bend);
+    bend.on = spec.bend != seq::TimeBendShape::Straight;
+    bend.cycles = spec.cycles;
+    bend.amount = spec.amount;
+    return bend;
 }
 
 inline seq::MonoPattern monoPattern(int length, std::uint32_t seed) {
@@ -210,10 +217,7 @@ inline Entry play(const Spec& spec) {
             params.direction = spec.direction;
             params.swing = spec.swing;
             params.gateLength = spec.gate;
-            params.ramp = spec.ramp;
-            params.skew = spec.skew;
-            params.rampCycles = spec.cycles;
-            params.hardAngle = spec.hardAngle;
+            params.bend = timeBend(spec);
             params.quantize = spec.quantize;
             params.quantizeSub = spec.quantizeSub;
             sequencer.processBlock(block.timing, shaped, params, recorder);
@@ -235,10 +239,7 @@ inline Entry play(const Spec& spec) {
             params.gateLength = spec.gate;
             params.accentVelocity = spec.accent;
             params.normalVelocity = spec.normal;
-            params.ramp = spec.ramp;
-            params.skew = spec.skew;
-            params.rampCycles = spec.cycles;
-            params.hardAngle = spec.hardAngle;
+            params.bend = timeBend(spec);
             params.quantize = spec.quantize;
             params.quantizeSub = spec.quantizeSub;
             sequencer.processBlock(block.timing, pattern, params, recorder);
@@ -314,9 +315,14 @@ inline std::vector<Spec> specs() {
          .direction = D::PingPong,
          .length = 7});
     add({.name = "mono.random", .direction = D::Random});
-    add({.name = "mono.ramp", .ramp = 0.6f, .skew = 0.2f, .cycles = 2});
-    add({.name = "mono.ramp.hard", .ramp = -0.5f, .skew = -0.3f, .cycles = 3, .hardAngle = true});
-    add({.name = "mono.quantize", .swing = 0.4f, .ramp = 0.3f, .quantize = 0.7f});
+    add({.name = "mono.rush", .bend = seq::TimeBendShape::Rush, .cycles = 2});
+    add({.name = "mono.rushdrag", .bend = seq::TimeBendShape::RushThenDrag, .cycles = 3});
+    add({.name = "mono.backwards", .bend = seq::TimeBendShape::Backwards, .amount = 0.8f});
+    add({.name = "mono.thereandback", .blockSize = 300, .bend = seq::TimeBendShape::ThereAndBack});
+    add({.name = "mono.quantize",
+         .swing = 0.4f,
+         .bend = seq::TimeBendShape::Rush,
+         .quantize = 0.7f});
     add({.name = "mono.long.bigblock",
          .blockSize = 2048,
          .bpm = 174.0,
@@ -336,9 +342,8 @@ inline std::vector<Spec> specs() {
     add({.name = "mono.startstop", .rate = R::Eighth, .swing = 0.25f, .script = Script::StartStop});
     add({.name = "mono.loop", .sampleRate = 44100.0, .blockSize = 441, .script = Script::Loop});
     add({.name = "mono.rateswitch", .script = Script::RateSwitch});
-    add({.name = "mono.ramp.startstop",
-         .ramp = 0.5f,
-         .skew = 0.1f,
+    add({.name = "mono.hold.startstop",
+         .bend = seq::TimeBendShape::HoldThenCatchUp,
          .cycles = 2,
          .script = Script::StartStop});
 
@@ -371,12 +376,15 @@ inline std::vector<Spec> specs() {
          .direction = D::PingPong,
          .length = 7});
     add({.name = "poly.random", .poly = true, .direction = D::Random, .seed = 99});
-    add({.name = "poly.ramp", .poly = true, .ramp = 0.6f, .skew = 0.2f, .cycles = 2});
+    add({.name = "poly.rush", .poly = true, .bend = seq::TimeBendShape::Rush, .cycles = 2});
+    add({.name = "poly.thereandback",
+         .poly = true,
+         .bend = seq::TimeBendShape::ThereAndBack,
+         .cycles = 2});
     add({.name = "poly.quantize",
          .poly = true,
          .swing = 0.4f,
-         .ramp = -0.3f,
-         .hardAngle = true,
+         .bend = seq::TimeBendShape::Drag,
          .quantize = 0.7f});
     add({.name = "poly.long.bigblock",
          .poly = true,
