@@ -89,6 +89,18 @@ TimeBend makeTimeBend(std::span<const TimeBendKnot> knots);
 /** @brief The curve of a starting shape, everything else at its default. */
 TimeBend makeTimeBend(TimeBendShape shape);
 
+/**
+ * @brief A groove's timing as a bend, in a meter of @p beatsPerBar, at @p amount.
+ *
+ * @p lateness holds a shift per grid step, -1 to 1 of a step, at @p notesPerBeat steps a beat:
+ * step k plays (k + lateness / 2) / notesPerBeat beats in, and points between steps move with
+ * them. The cycle repeats the groove until a span of 1, 2 or 4 bars over 1 to 8 cycles divides
+ * into it; nullopt when that takes more than 32 points. A late downbeat is a hold at the cycle's
+ * start; an early one is read as on the grid, since the head cannot cross the cycle's top.
+ */
+std::optional<TimeBend> grooveTimeBend(std::span<const float> lateness, int notesPerBeat,
+                                       double beatsPerBar, float amount = 1.0f);
+
 /** @brief The menu label of @p shape. */
 std::string_view timeBendShapeName(TimeBendShape shape);
 

@@ -3,6 +3,7 @@
 #include <array>
 #include <charconv>
 #include <string>
+#include <vector>
 
 #include "magda/sdk/curve/ModCurve.hpp"
 #include "magda/sdk/state/detail/NumberText.hpp"
@@ -127,6 +128,55 @@ TimeBend makeTimeBend(TimeBendShape shape) {
             return make({{0.0f, 0.0f}, {0.5f, 1.0f}, {1.0f, 0.0f}});
     }
     return {};
+}
+
+std::optional<TimeBend> grooveTimeBend(std::span<const float> lateness, int notesPerBeat,
+                                       double beatsPerBar, float amount) {
+    const auto steps = static_cast<int>(lateness.size());
+    if (steps <= 0 || notesPerBeat <= 0 || beatsPerBar <= 0.0)
+        return std::nullopt;
+    const double period = static_cast<double>(steps) / notesPerBeat;
+
+    // The fewest repeats of the groove that make a cycle the span divides into.
+    for (int repeats = 1; steps * repeats + 2 <= kMaxTimeBendPoints; ++repeats) {
+        const double cycle = period * repeats;
+        for (const int bars : {1, 2, 4}) {
+            const double cycles = bars * beatsPerBar / cycle;
+            const auto whole = std::lround(cycles);
+            if (whole < 1 || whole > kMaxTimeBendCycles || std::abs(cycles - whole) > 1.0e-9)
+                continue;
+
+            const int n = steps * repeats;
+            const auto shift = [&](int k) {
+                const auto l =
+                    std::clamp(lateness[static_cast<std::size_t>(k % steps)], -1.0f, 1.0f);
+                return static_cast<double>(k % steps == 0 ? std::max(l, 0.0f) : l);
+            };
+            std::vector<CurvePointData> points;
+            points.push_back({.phase = 0.0f, .value = 0.0f});
+            for (int k = 0; k < n; ++k) {
+                const double x = (k + 0.5 * shift(k)) / n;
+                if (k > 0 || x > 0.0)
+                    points.push_back({.phase = static_cast<float>(x),
+                                      .value = static_cast<float>(static_cast<double>(k) / n)});
+            }
+            // The downbeat after the cycle sounds at 1 + l0 / 2n; the head reaches the cycle's end
+            // short of it.
+            const double lastX = (n - 1 + 0.5 * shift(n - 1)) / n;
+            const double nextX = 1.0 + 0.5 * shift(0) / n;
+            const double endY = (n - 1.0) / n + (1.0 - lastX) / (nextX - lastX) / n;
+            points.push_back({.phase = 1.0f, .value = static_cast<float>(endY)});
+
+            TimeBend bend;
+            bend.on = true;
+            bend.amount = std::clamp(amount, 0.0f, 1.0f);
+            bend.bars = bars;
+            bend.cycles = static_cast<int>(whole);
+            bend.setCurve(points);
+            return bend;
+        }
+    }
+    return std::nullopt;
 }
 
 std::string_view timeBendShapeName(TimeBendShape shape) {
