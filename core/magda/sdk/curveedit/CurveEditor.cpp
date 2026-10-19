@@ -678,9 +678,9 @@ CurveEditorResponse CurveEditor::canvasDown(const CurveEditorPointer& pointer, i
 
     gesture_ = Target::Canvas;
     popupGesture_ = false;
-    canvasMode_ = pointer.mods.command ? CanvasMode::Pencil
-                  : pointer.mods.shift ? CanvasMode::Stamp
-                                       : CanvasMode::Select;
+    canvasMode_ = pointer.mods.command                ? CanvasMode::Pencil
+                  : pointer.mods.shift && allowSteps_ ? CanvasMode::Stamp
+                                                      : CanvasMode::Select;
 
     switch (canvasMode_) {
         case CanvasMode::Select:

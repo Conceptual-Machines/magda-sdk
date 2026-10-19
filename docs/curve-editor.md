@@ -44,7 +44,7 @@ markers, then the canvas.
 | Drag a point | Moves it, and the rest of the selection with it. Ends stay at 0 and 1. Two pixels or less is a click. |
 | Shift-click a point | Toggles it in the selection. |
 | Drag empty space | Lasso, after 4 pixels; selects the points whose centres it covers. |
-| Shift-click empty space | Stamps a step cell one X grid step wide: the point before it turns Step, a Step point at the click, a Linear point at the cell's end returning to the previous value. |
+| Shift-click empty space | Stamps a step cell one X grid step wide: the point before it turns Step, a Step point at the click, a Linear point at the cell's end returning to the previous value. Off with `setAllowSteps(false)`, which a time bend uses. |
 | Cmd-drag | Pencil: a point every 10 pixels and at the end, one edit. |
 | Drag a segment handle | Linear: bends vertically, the cursor being the on-curve midpoint. Hard corner: moves the apex, kept inside the segment and the range. |
 | Double-click a segment handle | Flattens the segment. |

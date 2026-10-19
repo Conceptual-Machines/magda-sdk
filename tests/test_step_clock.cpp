@@ -53,182 +53,6 @@ TEST_CASE("StepClock triplet rates are 2/3 of their base", "[stepclock][rate]") 
 // Ramp curve — bezier mode (smooth)
 // ============================================================================
 
-TEST_CASE("StepClock applyRampCurve identity when depth is zero", "[stepclock][ramp]") {
-    // With depth=0, curve should be identity (t → t) regardless of skew
-    for (float skew : {-1.0f, -0.5f, 0.0f, 0.5f, 1.0f}) {
-        for (double t = 0.0; t <= 1.0; t += 0.1) {
-            REQUIRE(StepClock::applyRampCurve(t, 0.0f, skew) == Approx(t).margin(0.002));
-        }
-    }
-}
-
-TEST_CASE("StepClock applyRampCurve endpoints are fixed", "[stepclock][ramp]") {
-    // Curve always maps 0→0 and 1→1
-    for (float depth : {-0.9f, -0.5f, 0.0f, 0.5f, 0.9f}) {
-        for (float skew : {-0.8f, 0.0f, 0.8f}) {
-            REQUIRE(StepClock::applyRampCurve(0.0, depth, skew) == Approx(0.0).margin(0.001));
-            REQUIRE(StepClock::applyRampCurve(1.0, depth, skew) == Approx(1.0).margin(0.001));
-        }
-    }
-}
-
-TEST_CASE("StepClock applyRampCurve is monotonically increasing", "[stepclock][ramp]") {
-    for (float depth : {-0.8f, -0.3f, 0.3f, 0.8f}) {
-        for (float skew : {-0.5f, 0.0f, 0.5f}) {
-            double prev = -1.0;
-            for (int i = 0; i <= 100; ++i) {
-                double t = static_cast<double>(i) / 100.0;
-                double val = StepClock::applyRampCurve(t, depth, skew);
-                REQUIRE(val >= prev - 1e-10);
-                prev = val;
-            }
-        }
-    }
-}
-
-TEST_CASE("StepClock applyRampCurve positive depth bows above diagonal", "[stepclock][ramp]") {
-    // At t=0.5, positive depth should produce value > 0.5 (front-loaded)
-    double mid = StepClock::applyRampCurve(0.5, 0.5f, 0.0f);
-    REQUIRE(mid > 0.5);
-}
-
-TEST_CASE("StepClock applyRampCurve negative depth bows below diagonal", "[stepclock][ramp]") {
-    // At t=0.5, negative depth should produce value < 0.5 (back-loaded)
-    double mid = StepClock::applyRampCurve(0.5, -0.5f, 0.0f);
-    REQUIRE(mid < 0.5);
-}
-
-TEST_CASE("StepClock applyRampCurve output stays in [0, 1]", "[stepclock][ramp]") {
-    for (float depth : {-0.99f, -0.5f, 0.0f, 0.5f, 0.99f}) {
-        for (float skew : {-1.0f, -0.5f, 0.0f, 0.5f, 1.0f}) {
-            for (int i = 0; i <= 100; ++i) {
-                double t = static_cast<double>(i) / 100.0;
-                double val = StepClock::applyRampCurve(t, depth, skew);
-                REQUIRE(val >= -0.01);
-                REQUIRE(val <= 1.01);
-            }
-        }
-    }
-}
-
-// ============================================================================
-// Ramp curve — hard angle (piecewise linear)
-// ============================================================================
-
-TEST_CASE("StepClock hard angle endpoints are fixed", "[stepclock][hardangle]") {
-    for (float depth : {-0.9f, -0.5f, 0.0f, 0.5f, 0.9f}) {
-        for (float skew : {-0.8f, 0.0f, 0.8f}) {
-            REQUIRE(StepClock::applyRampCurve(0.0, depth, skew, true) == Approx(0.0).margin(0.001));
-            REQUIRE(StepClock::applyRampCurve(1.0, depth, skew, true) == Approx(1.0).margin(0.001));
-        }
-    }
-}
-
-TEST_CASE("StepClock hard angle identity when depth is zero", "[stepclock][hardangle]") {
-    for (float skew : {-1.0f, 0.0f, 1.0f}) {
-        for (double t = 0.0; t <= 1.0; t += 0.1) {
-            REQUIRE(StepClock::applyRampCurve(t, 0.0f, skew, true) == Approx(t).margin(0.002));
-        }
-    }
-}
-
-TEST_CASE("StepClock hard angle is monotonically increasing", "[stepclock][hardangle]") {
-    for (float depth : {-0.8f, -0.3f, 0.3f, 0.8f}) {
-        for (float skew : {-0.5f, 0.0f, 0.5f}) {
-            double prev = -1.0;
-            for (int i = 0; i <= 100; ++i) {
-                double t = static_cast<double>(i) / 100.0;
-                double val = StepClock::applyRampCurve(t, depth, skew, true);
-                REQUIRE(val >= prev - 1e-10);
-                prev = val;
-            }
-        }
-    }
-}
-
-TEST_CASE("StepClock hard angle passes through control point", "[stepclock][hardangle]") {
-    float depth = 0.4f;
-    float skew = 0.2f;
-    // Control point x = 0.5 + skew * 0.49 = 0.598
-    // Control point y = s + depth = 0.598 + 0.4 = 0.998
-    double s = 0.5 + static_cast<double>(skew) * 0.49;
-    double expectedY = s + static_cast<double>(depth);
-    double val = StepClock::applyRampCurve(s, depth, skew, true);
-    REQUIRE(val == Approx(expectedY).margin(0.001));
-}
-
-TEST_CASE("StepClock hard angle is piecewise linear", "[stepclock][hardangle]") {
-    // Two line segments should have constant slope within each segment
-    float depth = 0.3f;
-    float skew = 0.0f;
-    double s = 0.5 + static_cast<double>(skew) * 0.49;
-
-    // Check linearity in first segment (0 to s)
-    double y_quarter = StepClock::applyRampCurve(s * 0.25, depth, skew, true);
-    double y_half = StepClock::applyRampCurve(s * 0.5, depth, skew, true);
-    double y_three_quarter = StepClock::applyRampCurve(s * 0.75, depth, skew, true);
-    // Midpoint should be average of quarter and three-quarter
-    REQUIRE(y_half == Approx((y_quarter + y_three_quarter) / 2.0).margin(0.001));
-}
-
-TEST_CASE("StepClock hard angle vs bezier differ at midpoints", "[stepclock][hardangle]") {
-    // Hard angle and smooth bezier should give different results for non-zero depth
-    float depth = 0.5f;
-    float skew = 0.0f;
-    double t = 0.25;
-    double bezier = StepClock::applyRampCurve(t, depth, skew, false);
-    double linear = StepClock::applyRampCurve(t, depth, skew, true);
-    REQUIRE(bezier != Approx(linear).margin(0.01));
-}
-
-// ============================================================================
-// Ramp curve — symmetry and skew
-// ============================================================================
-
-TEST_CASE("StepClock applyRampCurve with zero depth and zero skew is symmetric about midpoint",
-          "[stepclock][ramp]") {
-    // Symmetry f(0.5-dt) + f(0.5+dt) == 1.0 only holds when depth=0 (identity curve).
-    // With depth != 0 the control point moves off the diagonal, breaking symmetry.
-    float depth = 0.0f;
-    for (double dt = 0.05; dt < 0.5; dt += 0.05) {
-        double lo = StepClock::applyRampCurve(0.5 - dt, depth, 0.0f);
-        double hi = StepClock::applyRampCurve(0.5 + dt, depth, 0.0f);
-        REQUIRE(lo + hi == Approx(1.0).margin(0.01));
-    }
-}
-
-TEST_CASE("StepClock applyRampCurve skew shifts the inflection point", "[stepclock][ramp]") {
-    // Positive skew shifts the control point right → left half is flatter (lower values).
-    // At t=0.3, negative skew (control point shifted left) bends the curve up earlier,
-    // giving higher values than positive skew.
-    float depth = 0.3f;
-    double valPosSkew = StepClock::applyRampCurve(0.3, depth, 0.5f);
-    double valNegSkew = StepClock::applyRampCurve(0.3, depth, -0.5f);
-    REQUIRE(valNegSkew > valPosSkew);
-}
-
-TEST_CASE("StepClock applyRampCurveWithCycles matches single-cycle curve",
-          "[stepclock][ramp][cycles]") {
-    for (double t : {0.0, 0.1, 0.25, 0.5, 0.9, 1.0}) {
-        REQUIRE(StepClock::applyRampCurveWithCycles(t, 0.4f, -0.2f, 1, false) ==
-                Approx(StepClock::applyRampCurve(t, 0.4f, -0.2f, false)).margin(0.000001));
-    }
-}
-
-TEST_CASE("StepClock applyRampCurveWithCycles preserves repeated segment boundaries",
-          "[stepclock][ramp][cycles]") {
-    REQUIRE(StepClock::applyRampCurveWithCycles(0.0, 0.5f, 0.0f, 4, true) ==
-            Approx(0.0).margin(0.000001));
-    REQUIRE(StepClock::applyRampCurveWithCycles(0.25, 0.5f, 0.0f, 4, true) ==
-            Approx(0.25).margin(0.000001));
-    REQUIRE(StepClock::applyRampCurveWithCycles(0.5, 0.5f, 0.0f, 4, true) ==
-            Approx(0.5).margin(0.000001));
-    REQUIRE(StepClock::applyRampCurveWithCycles(0.75, 0.5f, 0.0f, 4, true) ==
-            Approx(0.75).margin(0.000001));
-    REQUIRE(StepClock::applyRampCurveWithCycles(1.0, 0.5f, 0.0f, 4, true) ==
-            Approx(1.0).margin(0.000001));
-}
-
 // ============================================================================
 // processBlock — reachable directly since the clock took a BlockTiming (#2313)
 // ============================================================================
@@ -370,13 +194,7 @@ TEST_CASE("StepClock swing pushes a tick later on the grid, never earlier",
 }
 
 TEST_CASE("StepClock plays a swung tick late instead of dropping it", "[stepclock][process]") {
-    // Regression for the defect #2313 surfaced: the emit guard used to accept a
-    // swung position only inside the block that scheduled it, while the step
-    // cursor advanced regardless, so a tick swung past the block end was never
-    // played. Swing offsets by up to half a step - several blocks at a typical
-    // buffer size - so from roughly 8% upward every odd tick vanished and the
-    // pattern played half its notes. A swung tick is now held until the block
-    // that contains it.
+    // Regression for #2313: a tick swung past the block that scheduled it was never played.
     ClockRunner straight;
     straight.run(straight.blocksFor(4.0), StepClock::Rate::Sixteenth, StepClock::Direction::Forward,
                  8, 0.0f);
@@ -398,10 +216,7 @@ TEST_CASE("StepClock plays a swung tick late instead of dropping it", "[stepcloc
     }
 }
 
-TEST_CASE("StepClock keeps a held-over tick inside the block that plays it",
-          "[stepclock][process]") {
-    // The carried tick reports a position and in-block offset belonging to the
-    // block that emits it, not the one that scheduled it.
+TEST_CASE("StepClock keeps a swung tick inside the block that plays it", "[stepclock][process]") {
     ClockRunner swung;
     const double blockSecs = ClockRunner::kBlockSamples / ClockRunner::kSampleRate;
     swung.run(swung.blocksFor(4.0), StepClock::Rate::Sixteenth, StepClock::Direction::Forward, 8,
@@ -415,8 +230,7 @@ TEST_CASE("StepClock keeps a held-over tick inside the block that plays it",
 }
 
 TEST_CASE("StepClock survives an arrangement loop wrapping the beat", "[stepclock][process]") {
-    // Beats jump backwards at a loop boundary; the clock's monotonic offset
-    // must keep stepping rather than re-anchoring and dropping steps.
+    // Beats jump backwards at a loop boundary; the grid plays on from wherever it lands.
     StepClock clock;
     clock.setSampleRate(ClockRunner::kSampleRate);
     StepClock::StepEvent buffer[16];
@@ -451,21 +265,17 @@ TEST_CASE("StepClock stops and resets when the transport stops", "[stepclock][pr
     runner.run(blocks, StepClock::Rate::Sixteenth, StepClock::Direction::Forward, 8, 0.0f,
                /*playing=*/false);
     REQUIRE(runner.events.size() == whilePlaying);
-    REQUIRE(runner.clock.getCurrentStep() == 0);
+    REQUIRE_FALSE(runner.clock.isRunning());
 }
 
 // ============================================================================
-// The pending queue — steps held for the block that actually contains them
-// (#2313), and never lost on the way there (#2335)
+// Quantize, the event cap and the time bend (#22)
 // ============================================================================
 
 namespace {
 
-/// Drive the clock over blocks of an arbitrary musical length, with quantize.
-/// Quantize snaps a tick toward a coarse grid, which can push it a long way
-/// past the block that scheduled it - much further than swing's half a step -
-/// so it is how a test builds up several pending steps at once.
-struct QuantizedRunner {
+/// Drive the clock over blocks of an arbitrary musical length.
+struct BlockRunner {
     static constexpr double kSampleRate = 48000.0;
     static constexpr int kBlockSamples = 512;
 
@@ -473,20 +283,21 @@ struct QuantizedRunner {
     double beat = 0.0;
     std::vector<StepClock::StepEvent> events;
 
-    QuantizedRunner() {
+    BlockRunner() {
         clock.setSampleRate(kSampleRate);
     }
 
-    /// One block spanning @p beats, taking at most @p maxEvents events out.
-    int block(double beats, int numSteps, int quantizeSub, int maxEvents) {
-        StepClock::StepEvent buffer[32];
+    int block(double beats, int numSteps, int maxEvents,
+              const magda::sdk::sequencer::TimeBend& bend, float quantize = 0.0f,
+              int quantizeSub = 16, float swing = 0.0f) {
+        StepClock::StepEvent buffer[256];
         const StepClock::BlockTiming timing{.startBeat = beat,
                                             .endBeat = beat + beats,
                                             .isPlaying = true,
                                             .numSamples = kBlockSamples};
-        const int n = clock.processBlock(timing, StepClock::Rate::Sixteenth,
-                                         StepClock::Direction::Forward, 0.0f, numSteps, buffer,
-                                         maxEvents, 0.0f, 0.0f, 1, false, 1.0f, quantizeSub);
+        const int n =
+            clock.processBlock(timing, StepClock::Rate::Sixteenth, StepClock::Direction::Forward,
+                               swing, numSteps, buffer, maxEvents, bend, quantize, quantizeSub);
         for (int e = 0; e < n; ++e)
             events.push_back(buffer[e]);
         beat += beats;
@@ -494,72 +305,48 @@ struct QuantizedRunner {
     }
 };
 
-}  // namespace
-
-TEST_CASE("StepClock holds a due step the caller has no room for", "[stepclock][process]") {
-    // Regression for #2335. A pending step whose beat fell inside the block was
-    // emitted when there was room and DROPPED when there was not: the loop's
-    // "keep it pending" branch only covered steps still in the future, so a
-    // full event buffer took the step out of the pattern for good. It now waits
-    // for a block with room, as a step past the block end always did.
-    //
-    // Four sixteenths a cycle is one beat, and a quantize grid of one division
-    // per cycle snaps everything to a whole beat: ticks at 0.5 and 0.75 both
-    // land on beat 1, past a block that ends there, so two steps go pending.
-    QuantizedRunner runner;
-    runner.block(/*beats=*/1.0, /*numSteps=*/4, /*quantizeSub=*/1, /*maxEvents=*/32);
-
-    // Room for one of the two, so step 2 plays and step 3 has to wait.
-    REQUIRE(runner.block(1.0, 4, 1, /*maxEvents=*/1) == 1);
-    REQUIRE(runner.events.back().stepIndex == 2);
-    const size_t afterSqueeze = runner.events.size();
-
-    // Step 3 is still owed, and is the first thing the next block plays.
-    // Before the fix it was gone and this block opened on a fresh tick.
-    REQUIRE(runner.block(1.0, 4, 1, /*maxEvents=*/32) >= 1);
-    REQUIRE(runner.events.size() > afterSqueeze);
-    REQUIRE(runner.events[afterSqueeze].stepIndex == 3);
+magda::sdk::sequencer::TimeBend bent(magda::sdk::sequencer::TimeBendShape shape, int cycles = 1) {
+    auto bend = magda::sdk::sequencer::makeTimeBend(shape);
+    bend.on = true;
+    bend.cycles = cycles;
+    return bend;
 }
 
-TEST_CASE("StepClock holds every step a coarse quantize pushes past the block",
+}  // namespace
+
+TEST_CASE("StepClock plays every step a coarse quantize pulls past the block",
           "[stepclock][process]") {
-    // Regression for #2335. The pending queue was eight entries deep, sized for
-    // swing - which can only push a tick within half a step of the block end,
-    // so at most one at a time. Quantize snaps toward a grid that may be far
-    // coarser than the rate, and a big offline block can push a whole half of
-    // the pattern past its end at once; the ninth onwards were dropped with no
-    // branch to hold them. The queue is now one entry per step.
-    //
-    // 32 sixteenths is an eight-beat cycle, and one grid division per cycle
-    // snaps each tick to the nearer of beat 0 and beat 8: steps 0-15 fire at
-    // the block's start, steps 16-31 all land on its end.
-    QuantizedRunner runner;
-    REQUIRE(runner.block(/*beats=*/8.0, /*numSteps=*/32, /*quantizeSub=*/1, /*maxEvents=*/32) ==
-            16);
+    // A two-bar cycle with one quantize division snaps each tick to a multiple of 8 beats: steps
+    // 16-31 land on the first block's end, which is the next block's start.
+    BlockRunner runner;
+    const magda::sdk::sequencer::TimeBend twoBars{.bars = 2};
+    runner.block(8.0, 32, 256, twoBars, 1.0f, 1);
+    for (const auto& event : runner.events)
+        REQUIRE(event.beatPosition == 0.0);
 
     const size_t afterFirst = runner.events.size();
-    runner.block(/*beats=*/0.5, /*numSteps=*/32, /*quantizeSub=*/1, /*maxEvents=*/32);
+    runner.block(0.5, 32, 256, twoBars, 1.0f, 1);
 
     std::vector<int> carried;
     for (size_t i = afterFirst; i < runner.events.size(); ++i)
         carried.push_back(runner.events[i].stepIndex);
-
-    // All sixteen, not the eight the old queue had room for.
     for (int step = 16; step < 32; ++step)
         REQUIRE(std::find(carried.begin(), carried.end(), step) != carried.end());
 }
 
+TEST_CASE("StepClock keeps a block's earliest steps when the caller's array is full",
+          "[stepclock][process]") {
+    BlockRunner runner;
+    REQUIRE(runner.block(4.0, 16, 4, {}) == 4);
+    for (int i = 0; i < 4; ++i)
+        REQUIRE(runner.events[static_cast<size_t>(i)].stepIndex == i);
+}
+
 TEST_CASE("StepClock brings its position back inside a pattern that shrank",
           "[stepclock][process]") {
-    // Regression for #2335. The cursor was emitted unwrapped, so shortening a
-    // pattern under a running clock kept playing the steps the user had just
-    // hidden - and in ping-pong the turnaround then walked down through the
-    // rest of them rather than back into the pattern.
     for (auto direction : {StepClock::Direction::Forward, StepClock::Direction::Reverse,
-                           StepClock::Direction::PingPong}) {
+                           StepClock::Direction::PingPong, StepClock::Direction::Random}) {
         ClockRunner runner;
-        // Four beats of sixteenths is sixteen steps, so the cursor is well past
-        // the eight the pattern is about to become.
         runner.run(runner.blocksFor(4.0), StepClock::Rate::Sixteenth, direction, 32);
         const size_t beforeShrink = runner.events.size();
         REQUIRE(beforeShrink > 8);
@@ -571,37 +358,72 @@ TEST_CASE("StepClock brings its position back inside a pattern that shrank",
     }
 }
 
-TEST_CASE("StepClock keeps the steps a full event array could not carry", "[stepclock][process]") {
-    // Regression for #2335. Stopping the emit loop at maxEvents left the cursor
-    // where it stood, and the next block's catch-up then walked through the
-    // ticks it had not emitted without emitting any of them - so a block
-    // holding more steps than the caller's array lost every one past the last
-    // that fitted. Those ticks now wait in the queue that already exists for a
-    // tick the block cannot play.
-    constexpr int kMaxEvents = 16;  // what the sequencers passed before #2335
-    constexpr int kSteps = 32;
+TEST_CASE("StepClock plays the same steps whatever the block size", "[stepclock][process]") {
+    const auto bend = bent(magda::sdk::sequencer::TimeBendShape::RushThenDrag, 2);
 
-    StepClock clock;
-    clock.setSampleRate(48000.0);
+    BlockRunner whole;
+    whole.block(16.0, 16, 256, bend, 0.4f, 32, 0.3f);
 
-    std::vector<int> played;
-    const auto block = [&](double startBeat, double endBeat) {
-        StepClock::StepEvent buffer[kMaxEvents];
-        const StepClock::BlockTiming timing{
-            .startBeat = startBeat, .endBeat = endBeat, .isPlaying = true, .numSamples = 4096};
-        const int written =
-            clock.processBlock(timing, StepClock::Rate::ThirtySecond, StepClock::Direction::Forward,
-                               0.0f, kSteps, buffer, kMaxEvents);
-        for (int i = 0; i < written; ++i)
-            played.push_back(buffer[i].stepIndex);
-    };
+    BlockRunner pieces;
+    for (int i = 0; pieces.beat < 16.0 - 1e-9; ++i)
+        pieces.block(std::min(16.0 - pieces.beat, 0.017 + 0.05 * (i % 5)), 16, 256, bend, 0.4f, 32,
+                     0.3f);
 
-    // One dense block: four beats of thirty-seconds is 32 steps, twice the
-    // array. Then ordinary blocks, which is when the held ticks come out.
-    block(0.0, 4.0);
-    for (int i = 0; i < 4; ++i)
-        block(4.0 + (i * 0.25), 4.25 + (i * 0.25));
+    REQUIRE(whole.events.size() == 64);
+    REQUIRE(pieces.events.size() == whole.events.size());
+    for (size_t i = 0; i < whole.events.size(); ++i) {
+        REQUIRE(pieces.events[i].stepIndex == whole.events[i].stepIndex);
+        REQUIRE(pieces.events[i].beatPosition == Approx(whole.events[i].beatPosition).margin(1e-9));
+    }
+}
 
-    for (int step = 0; step < kSteps; ++step)
-        REQUIRE(std::count(played.begin(), played.end(), step) >= 1);
+TEST_CASE("StepClock holds through a flat bend and catches up after it", "[stepclock][bend]") {
+    BlockRunner runner;
+    for (int i = 0; i < 64; ++i)
+        runner.block(0.0625, 16, 256, bent(magda::sdk::sequencer::TimeBendShape::HoldThenCatchUp));
+
+    // The hold reaches back to step 0 too: it plays where the head starts to move.
+    REQUIRE(runner.events.size() == 16);
+    for (size_t i = 0; i < runner.events.size(); ++i) {
+        REQUIRE(runner.events[i].beatPosition >= 2.0);
+        REQUIRE(runner.events[i].stepIndex == static_cast<int>(i));
+    }
+}
+
+TEST_CASE("StepClock reads the pattern backwards through a falling bend", "[stepclock][bend]") {
+    BlockRunner runner;
+    runner.block(4.0, 16, 256, bent(magda::sdk::sequencer::TimeBendShape::Backwards));
+
+    REQUIRE(runner.events.size() == 16);
+    for (size_t i = 1; i < runner.events.size(); ++i) {
+        REQUIRE(runner.events[i].beatPosition > runner.events[i - 1].beatPosition);
+        REQUIRE(runner.events[i].stepIndex == (runner.events[i - 1].stepIndex + 15) % 16);
+    }
+}
+
+TEST_CASE("StepClock names the step that plays after the block", "[stepclock][bend]") {
+    BlockRunner straight;
+    straight.block(1.1, 16, 256, {});
+    REQUIRE(straight.clock.getNextStep() == 5);
+
+    // Step 0 opens the catch-up at beat 2, so a block just past it is followed by step 1.
+    BlockRunner held;
+    held.block(2.05, 16, 256, bent(magda::sdk::sequencer::TimeBendShape::HoldThenCatchUp));
+    REQUIRE(held.clock.getNextStep() == 1);
+}
+
+TEST_CASE("StepClock's Random direction is fixed by its seed and the tick",
+          "[stepclock][process]") {
+    StepClock a;
+    StepClock b;
+    a.setRandomSeed(42);
+    b.setRandomSeed(42);
+    std::vector<int> seen(8, 0);
+    for (long long tick = -50; tick < 200; ++tick) {
+        const int step = a.stepForTick(tick, 8, StepClock::Direction::Random);
+        REQUIRE(step == b.stepForTick(tick, 8, StepClock::Direction::Random));
+        ++seen[static_cast<size_t>(step)];
+    }
+    for (int count : seen)
+        REQUIRE(count > 10);
 }

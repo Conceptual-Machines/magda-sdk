@@ -55,4 +55,41 @@ inline float evalSegment(float y1, float y2, float controlY, float tension, bool
     return y1 + dy * warp;
 }
 
+/**
+ * @brief evalSegment() in double with a 1e-9 flat threshold, for timing read off a curve (#22).
+ *
+ * The same warp: a float read of a time bend misses Rhythmica's by up to 2.5e-4 of the cycle.
+ */
+inline double evalSegmentPrecise(double y1, double y2, double controlY, double tension,
+                                 bool hasStoredShaper, double t) {
+    const double dy = y2 - y1;
+    if (std::abs(dy) < 1.0e-9)
+        return y1;
+
+    double r = NAN;
+    if (hasStoredShaper) {
+        const double midY = 0.25 * y1 + 0.5 * controlY + 0.25 * y2;
+        const double rRaw = (midY - y1) / dy;
+
+        constexpr double kEps = 1.0e-4;
+        if (rRaw <= 0.0)
+            r = kEps * std::exp(rRaw * 5.0);
+        else if (rRaw >= 1.0)
+            r = 1.0 - kEps * std::exp((1.0 - rRaw) * 5.0);
+        else
+            r = std::clamp(rRaw, kEps, 1.0 - kEps);
+    } else {
+        if (std::abs(tension) < 0.001)
+            return y1 + t * dy;
+        r = (tension > 0.0) ? std::pow(0.5, 1.0 + tension * 2.0)
+                            : 1.0 - std::pow(0.5, 1.0 - tension * 2.0);
+        r = std::clamp(r, 1.0e-4, 1.0 - 1.0e-4);
+    }
+
+    const double inv = 1.0 / std::log(0.5);
+    const double warp = (r <= 0.5) ? std::pow(t, std::log(r) * inv)
+                                   : 1.0 - std::pow(1.0 - t, std::log(1.0 - r) * inv);
+    return y1 + dy * warp;
+}
+
 }  // namespace magda::sdk::curvemath
