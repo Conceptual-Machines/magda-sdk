@@ -1,5 +1,6 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <variant>
 #include <vector>
 
 #include "magda/sdk/waveview/WaveformView.hpp"
@@ -174,4 +175,74 @@ TEST_CASE("Both sources report the loudest absolute sample", "[waveview]") {
     CHECK(stored.absolutePeak(0, 64) == Approx(0.75f).margin(1e-4));
     // Buckets are 64 samples, so a range inside one reads the whole bucket.
     CHECK(stored.absolutePeak(20, 30) == Approx(0.75f).margin(1e-4));
+}
+
+TEST_CASE("The scroll bar's thumb scrolls and its edges zoom", "[waveview]") {
+    Fixture f;
+    f.view.setChrome({.scrollBar = true});
+    const float bar = 80.0f - WaveformView::kScrollBarHeight / 2.0f;
+
+    f.view.zoomBy(4.0, 0.0f);
+    f.view.pointerDown(at(25.0f, bar));
+    f.view.pointerDrag(at(75.0f, bar));
+    f.view.pointerUp(at(75.0f, bar));
+    CHECK(f.view.scrollSeconds() == Approx(0.25));
+    CHECK(f.view.pixelsPerSecond() == Approx(800.0));
+
+    // A press on the track centres the thumb there.
+    f.view.pointerDown(at(150.0f, bar));
+    f.view.pointerUp(at(150.0f, bar));
+    CHECK(f.view.scrollSeconds() == Approx(0.625));
+
+    // The end edge keeps the start where it is.
+    f.view.zoomBy(0.01, 0.0f);
+    f.view.pointerDown(at(198.0f, bar));
+    f.view.pointerDrag(at(98.0f, bar));
+    CHECK(f.view.pixelsPerSecond() == Approx(400.0));
+    CHECK(f.view.scrollSeconds() == 0.0);
+    CHECK(f.view.markers().end == 1.0);
+}
+
+TEST_CASE("A drag on the ruler zooms about the press", "[waveview]") {
+    Fixture f;
+    f.view.setChrome({.ruler = true});
+    CHECK(f.view.overRuler(at(50.0f, 5.0f)));
+    CHECK_FALSE(f.view.overRuler(at(50.0f, 40.0f)));
+    CHECK(f.view.cursor(at(50.0f, 5.0f)) == WaveformCursor::Zoom);
+
+    f.view.pointerDown(at(100.0f, 5.0f));
+    f.view.pointerDrag(at(100.0f, -40.0f));
+    CHECK(f.view.pixelsPerSecond() > 200.0);
+    CHECK(f.view.pixelToSeconds(100.0f) == Approx(0.5));
+    CHECK(f.view.markers().start == 0.0);
+}
+
+TEST_CASE("Hidden start and end markers neither draw nor take a press", "[waveview]") {
+    Fixture f;
+    auto markers = f.view.markers();
+    markers.startEnd = false;
+    f.view.setMarkers(markers);
+
+    magda::sdk::display::DisplayList list;
+    f.view.render(list);
+    for (const auto& command : list.commands()) {
+        const auto* fill = std::get_if<magda::sdk::display::FillRect>(&command);
+        if (fill == nullptr)
+            continue;
+        const auto* colour = std::get_if<magda::sdk::display::Colour>(&fill->paint);
+        CHECK_FALSE((colour != nullptr &&
+                     (colour->role == magda::sdk::display::ColourRole::MarkerStart ||
+                      colour->role == magda::sdk::display::ColourRole::MarkerEnd)));
+    }
+
+    // At the start marker's pixel, a press finds nothing to move.
+    f.view.pointerDown(at(0.0f));
+    f.view.pointerDrag(at(20.0f));
+    CHECK(f.view.markers().start == 0.0);
+
+    // The loop markers still drag.
+    f.view.pointerUp(at(20.0f));
+    f.view.pointerDown(at(50.0f));
+    f.view.pointerDrag(at(60.0f));
+    CHECK(f.view.markers().loopStart == Approx(0.3));
 }

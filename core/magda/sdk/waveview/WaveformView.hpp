@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <utility>
 
 #include "magda/sdk/display/DisplayList.hpp"
 #include "magda/sdk/peaks/PeakData.hpp"
@@ -55,9 +56,21 @@ class PeakDataWaveformSource final : public WaveformSource {
 struct WaveformMarkers {
     double start = 0.0;
     double end = 0.0;
+    /// False hides the start and end markers, drawn and grabbed: a host showing the loop in
+    /// their place.
+    bool startEnd = true;
     bool loop = false;
     double loopStart = 0.0;
     double loopEnd = 0.0;
+};
+
+enum class WaveformUnits { Seconds, Samples };
+
+/// Bands around the wave, both off by default: a time ruler above, a zoom/scroll bar below.
+struct WaveformChrome {
+    bool ruler = false;
+    WaveformUnits units = WaveformUnits::Seconds;
+    bool scrollBar = false;
 };
 
 struct WaveformPointer {
@@ -86,7 +99,10 @@ struct WaveformResponse {
 class WaveformView {
   public:
     static constexpr double kMaxPixelsPerSecond = 5000.0;
+    static constexpr int kRulerHeight = 18;
+    static constexpr int kScrollBarHeight = 10;
 
+    /// The pane includes the chrome's bands; the wave takes the height between them.
     void setSize(int width, int height);
     /// Fits the source to the width and scrolls home. Null clears. The source must outlive its use.
     void setSource(const WaveformSource* source, double lengthSeconds);
@@ -111,6 +127,14 @@ class WaveformView {
     void setPlayhead(double seconds) {
         playhead_ = seconds;
     }
+    void setChrome(const WaveformChrome& chrome) {
+        chrome_ = chrome;
+    }
+    const WaveformChrome& chrome() const {
+        return chrome_;
+    }
+    /// Whether @p pointer is over the ruler, for a host that puts its own menu there.
+    bool overRuler(const WaveformPointer& pointer) const;
 
     double pixelsPerSecond() const {
         return pixelsPerSecond_;
@@ -135,12 +159,34 @@ class WaveformView {
     void render(display::DisplayList& out) const;
 
   private:
-    enum class Drag { None, SampleStart, SampleEnd, LoopStart, LoopEnd, LoopRegion, Scroll, Zoom };
+    enum class Drag {
+        None,
+        SampleStart,
+        SampleEnd,
+        LoopStart,
+        LoopEnd,
+        LoopRegion,
+        Scroll,
+        Zoom,
+        Thumb,
+        ThumbStart,
+        ThumbEnd
+    };
 
     Drag hitTest(int x, int y) const;
+    Drag scrollBarHitTest(int x) const;
     double minPixelsPerSecond() const;
     void clampScroll();
     void setMarker(Drag drag, double seconds);
+    void dragThumb(Drag drag, int x);
+
+    int waveTop() const;
+    int waveBottom() const;
+    bool inScrollBar(int y) const;
+    /// The thumb's left edge and width, in pane pixels.
+    std::pair<float, float> thumb() const;
+    void renderRuler(display::DisplayList& out) const;
+    void renderScrollBar(display::DisplayList& out) const;
 
     const WaveformSource* source_ = nullptr;
     double lengthSeconds_ = 0.0;
@@ -149,6 +195,7 @@ class WaveformView {
     float gain_ = 1.0f;
     WaveformMarkers markers_;
     bool loopMarkersFirst_ = false;
+    WaveformChrome chrome_;
     double playhead_ = 0.0;
     double pixelsPerSecond_ = 0.0;
     double scrollSeconds_ = 0.0;

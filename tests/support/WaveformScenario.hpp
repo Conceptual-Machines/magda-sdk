@@ -91,6 +91,13 @@ inline void configure(const detail::JsonValue& c, const Source& source, Waveform
     }
     view.setMarkers(markers);
     view.setPlayhead(numberOf(c.member("playhead"), 0.0));
+    if (const auto* chrome = c.member("chrome")) {
+        const auto* units = chrome->member("units");
+        view.setChrome({flagOf(chrome->member("ruler")),
+                        units != nullptr && units->string == "samples" ? WaveformUnits::Samples
+                                                                       : WaveformUnits::Seconds,
+                        flagOf(chrome->member("scrollBar"))});
+    }
 }
 
 inline void play(const detail::JsonValue& e, WaveformView& view) {
