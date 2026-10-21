@@ -1,5 +1,6 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <variant>
 #include <vector>
 
 #include "magda/sdk/waveview/WaveformView.hpp"
@@ -214,4 +215,34 @@ TEST_CASE("A drag on the ruler zooms about the press", "[waveview]") {
     CHECK(f.view.pixelsPerSecond() > 200.0);
     CHECK(f.view.pixelToSeconds(100.0f) == Approx(0.5));
     CHECK(f.view.markers().start == 0.0);
+}
+
+TEST_CASE("Hidden start and end markers neither draw nor take a press", "[waveview]") {
+    Fixture f;
+    auto markers = f.view.markers();
+    markers.startEnd = false;
+    f.view.setMarkers(markers);
+
+    magda::sdk::display::DisplayList list;
+    f.view.render(list);
+    for (const auto& command : list.commands()) {
+        const auto* fill = std::get_if<magda::sdk::display::FillRect>(&command);
+        if (fill == nullptr)
+            continue;
+        const auto* colour = std::get_if<magda::sdk::display::Colour>(&fill->paint);
+        CHECK_FALSE((colour != nullptr &&
+                     (colour->role == magda::sdk::display::ColourRole::MarkerStart ||
+                      colour->role == magda::sdk::display::ColourRole::MarkerEnd)));
+    }
+
+    // At the start marker's pixel, a press finds nothing to move.
+    f.view.pointerDown(at(0.0f));
+    f.view.pointerDrag(at(20.0f));
+    CHECK(f.view.markers().start == 0.0);
+
+    // The loop markers still drag.
+    f.view.pointerUp(at(20.0f));
+    f.view.pointerDown(at(50.0f));
+    f.view.pointerDrag(at(60.0f));
+    CHECK(f.view.markers().loopStart == Approx(0.3));
 }

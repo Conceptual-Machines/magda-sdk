@@ -16,7 +16,7 @@ one channel of samples exactly; `PeakDataWaveformSource` reads stored peaks (doc
 | `setSize(w, h)` | The pane, chrome included. Zoom never goes below fitting the whole source. |
 | `setSource(source, seconds)` | Fits the source to the width and scrolls home. |
 | `setGain(g)` | Scales the drawn peaks. |
-| `setMarkers(m)` / `markers()` | Start, end, and the loop region with its on flag. |
+| `setMarkers(m)` / `markers()` | Start and end, which can be hidden, and the loop region with its on flag. |
 | `setPlayhead(s)` | Drawn while above zero. |
 | `setChrome(c)` | Optional bands, both off by default: a time ruler above the wave (18 px, in seconds or samples) and a zoom/scroll bar below it (10 px). |
 | `overRuler(p)` | Whether a pointer is over the ruler, for a host that puts a menu there. |
