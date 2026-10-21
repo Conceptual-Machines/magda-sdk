@@ -198,9 +198,9 @@ WaveformView::Drag WaveformView::hitTest(int x, int y) const {
         return Drag::LoopEnd;
     if (loopFirst && near(markers_.loopStart))
         return Drag::LoopStart;
-    if (near(markers_.end))
+    if (markers_.startEnd && near(markers_.end))
         return Drag::SampleEnd;
-    if (near(markers_.start))
+    if (markers_.startEnd && near(markers_.start))
         return Drag::SampleStart;
     if (markers_.loop) {
         if (near(markers_.loopStart))
@@ -474,8 +474,10 @@ void WaveformView::render(display::DisplayList& out) const {
         }
     }
 
-    line(markers_.start, Colour::of(ColourRole::MarkerStart));
-    line(markers_.end, Colour::of(ColourRole::MarkerEnd));
+    if (markers_.startEnd) {
+        line(markers_.start, Colour::of(ColourRole::MarkerStart));
+        line(markers_.end, Colour::of(ColourRole::MarkerEnd));
+    }
     if (markers_.loop) {
         line(markers_.loopStart, Colour::of(ColourRole::LoopRegion));
         line(markers_.loopEnd, Colour::of(ColourRole::LoopRegion));

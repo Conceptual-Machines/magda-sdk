@@ -56,6 +56,9 @@ class PeakDataWaveformSource final : public WaveformSource {
 struct WaveformMarkers {
     double start = 0.0;
     double end = 0.0;
+    /// False hides the start and end markers, drawn and grabbed: a host showing the loop in
+    /// their place.
+    bool startEnd = true;
     bool loop = false;
     double loopStart = 0.0;
     double loopEnd = 0.0;
