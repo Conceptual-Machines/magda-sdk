@@ -342,7 +342,7 @@ class TrackMeasurer {
     std::atomic<bool> valid_{false};
 
     std::atomic<bool> captureSpectrum_{false};
-    engine::SampleRing spectrumRing_{4096};  // >= one 2048-point FFT frame
+    engine::SampleRing spectrumRing_{16384};  // 8192-point frames at 50% overlap (magda-core#3185)
 };
 
 }  // namespace magda::sdk

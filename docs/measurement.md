@@ -14,7 +14,7 @@ SDK biquad and polyphase upsampler.
 | `prepare(rate, maxBlockSize, truePeak)` | any | Sets the rate and clears every window. `maxBlockSize` is unused. |
 | `process(ConstBufferView)` | audio | Measures a block of any length. One channel is read as L == R. |
 | `read()` | message | Lock-free `LevelsSnapshot`. |
-| `setSpectrumCaptureEnabled(bool)` | any | Writes a mono downmix into `getSpectrumRing()` (a 4096-sample `SampleRing`). |
+| `setSpectrumCaptureEnabled(bool)` | any | Writes a mono downmix into `getSpectrumRing()` (a 16384-sample `SampleRing`). |
 
 The integrated histogram is read with benign races, so a torn read is a slightly stale value.
 
