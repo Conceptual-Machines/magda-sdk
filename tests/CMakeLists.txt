@@ -27,6 +27,7 @@ add_executable(magda_sdk_tests
     test_lagrange_resampler.cpp
     test_launch_tap.cpp
     test_log_mel.cpp
+    test_groove_extraction.cpp
     test_meter_golden.cpp
     test_meter_model.cpp
     test_metering_buffer.cpp

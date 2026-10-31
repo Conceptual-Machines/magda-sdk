@@ -54,6 +54,7 @@ add_library(magda_sdk_core STATIC
     core/magda/sdk/mod/ModRandom.cpp
     core/magda/sdk/peaks/PeakData.cpp
     core/magda/sdk/preset/Preset.cpp
+    core/magda/sdk/sequencer/GrooveExtraction.cpp
     core/magda/sdk/sequencer/MonoStepSequencer.cpp
     core/magda/sdk/sequencer/PolyStepSequencer.cpp
     core/magda/sdk/sequencer/StepClock.cpp
