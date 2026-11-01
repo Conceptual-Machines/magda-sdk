@@ -14,6 +14,8 @@ namespace {
 
 constexpr std::string_view kNodeType = "TimeBend";
 constexpr std::string_view kPointType = "Point";
+constexpr std::string_view kDynamicsType = "Dynamics";
+constexpr std::string_view kRowType = "Row";
 
 constexpr int kLinear = static_cast<int>(CurveInterpolation::Linear);
 constexpr int kHardCorner = static_cast<int>(CurveInterpolation::HardCorner);
@@ -22,12 +24,46 @@ int clampBars(int bars) {
     return bars <= 1 ? 1 : bars <= 2 ? 2 : 4;
 }
 
+bool drawn(std::uint32_t rows, int row) {
+    return row == 0 || ((rows >> row) & 1u) != 0;
+}
+
 bool isStraight(const CurvePointData& point) {
     return point.tension == 0.0f && point.outHandleX == 0.0f && point.outHandleY == 0.0f &&
            point.inHandleX == 0.0f && point.inHandleY == 0.0f;
 }
 
 }  // namespace
+
+int TimeBendDynamics::rowFor(int row) const {
+    return row > 0 && row < kDynamicsRows && drawn(rows, row) ? row : 0;
+}
+
+float TimeBendDynamics::level(int row, int step) const {
+    if (!on || step < 0)
+        return 1.0f;
+    const auto value = values[static_cast<std::size_t>(rowFor(row))]
+                             [static_cast<std::size_t>(step % kMaxDynamicsSteps)];
+    return 1.0f - std::clamp(amount, 0.0f, 1.0f) * (1.0f - std::clamp(value, 0.0f, 1.0f));
+}
+
+bool TimeBendDynamics::isActive() const {
+    if (!on || !(amount > 0.0f))
+        return false;
+    for (int r = 0; r < kDynamicsRows; ++r)
+        if (drawn(rows, r) && std::ranges::any_of(values[static_cast<std::size_t>(r)],
+                                                  [](float v) { return v < 1.0f; }))
+            return true;
+    return false;
+}
+
+void TimeBendDynamics::sanitise() {
+    amount = std::isfinite(amount) ? std::clamp(amount, 0.0f, 1.0f) : 1.0f;
+    rows = (rows | 1u) & ((1u << kDynamicsRows) - 1u);
+    for (int r = 0; r < kDynamicsRows; ++r)
+        for (auto& v : values[static_cast<std::size_t>(r)])
+            v = drawn(rows, r) && std::isfinite(v) ? std::clamp(v, 0.0f, 1.0f) : 1.0f;
+}
 
 void TimeBend::setCurve(std::span<const CurvePointData> curve) {
     points = {};
@@ -56,13 +92,15 @@ bool TimeBend::isActive() const {
 }
 
 void TimeBend::sanitise() {
+    dynamics.sanitise();
     amount = std::isfinite(amount) ? std::clamp(amount, 0.0f, 1.0f) : 1.0f;
     bars = clampBars(bars);
     cycles = std::clamp(cycles, 1, kMaxTimeBendCycles);
     count = std::clamp(count, 0, kMaxTimeBendPoints);
 
     if (count < 2) {
-        *this = TimeBend{.on = on, .amount = amount, .bars = bars, .cycles = cycles};
+        *this = TimeBend{
+            .on = on, .amount = amount, .bars = bars, .cycles = cycles, .dynamics = dynamics};
         return;
     }
 
@@ -179,6 +217,21 @@ std::optional<TimeBend> grooveTimeBend(std::span<const float> lateness, int note
     return std::nullopt;
 }
 
+int figureSteps(double cycleBeats, double stepBeats) {
+    if (!(cycleBeats > 0.0) || !(stepBeats > 0.0) || !std::isfinite(cycleBeats / stepBeats))
+        return 0;
+    return static_cast<int>(std::clamp(std::round(cycleBeats / stepBeats), 1.0,
+                                       static_cast<double>(kMaxDynamicsSteps)));
+}
+
+int figureStep(double beat, double cycleBeats, double stepBeats) {
+    const int steps = figureSteps(cycleBeats, stepBeats);
+    if (steps == 0 || !std::isfinite(beat))
+        return -1;
+    const double into = beat - std::floor(beat / cycleBeats) * cycleBeats;
+    return static_cast<int>(std::llround(into / stepBeats) % steps);
+}
+
 std::string_view timeBendShapeName(TimeBendShape shape) {
     switch (shape) {
         case TimeBendShape::Straight:
@@ -197,67 +250,6 @@ std::string_view timeBendShapeName(TimeBendShape shape) {
             return "There and back";
     }
     return {};
-}
-
-StateNode writeTimeBend(const TimeBend& bend) {
-    StateNode node{std::string(kNodeType)};
-    node.setBool("on", bend.on);
-    node.setDouble("amount", bend.amount);
-    node.setInt("bars", bend.bars);
-    node.setInt("cycles", bend.cycles);
-    for (const auto& p : bend.curve()) {
-        StateNode point{std::string(kPointType)};
-        point.setDouble("x", p.phase);
-        point.setDouble("y", p.value);
-        if (p.curveType != kLinear)
-            point.setInt("type", p.curveType);
-        if (p.tension != 0.0f)
-            point.setDouble("tension", p.tension);
-        if (p.outHandleX != 0.0f || p.outHandleY != 0.0f) {
-            point.setDouble("outX", p.outHandleX);
-            point.setDouble("outY", p.outHandleY);
-        }
-        if (p.inHandleX != 0.0f || p.inHandleY != 0.0f) {
-            point.setDouble("inX", p.inHandleX);
-            point.setDouble("inY", p.inHandleY);
-        }
-        node.addChild(std::move(point));
-    }
-    return node;
-}
-
-std::optional<TimeBend> readTimeBend(const StateNode& node) {
-    if (node.type() != kNodeType)
-        return std::nullopt;
-
-    TimeBend bend;
-    bend.on = node.getBool("on", false);
-    bend.amount = static_cast<float>(node.getDouble("amount", 1.0));
-    bend.bars = node.getInt("bars", 1);
-    bend.cycles = node.getInt("cycles", 1);
-
-    std::array<CurvePointData, kMaxTimeBendPoints> read{};
-    std::size_t n = 0;
-    for (const auto& child : node.children()) {
-        if (child.type() != kPointType || n == read.size())
-            continue;
-        auto& p = read[n++];
-        p.phase = static_cast<float>(child.getDouble("x"));
-        p.value = static_cast<float>(child.getDouble("y"));
-        p.curveType = child.getInt("type", kLinear);
-        p.tension = static_cast<float>(child.getDouble("tension"));
-        p.outHandleX = static_cast<float>(child.getDouble("outX"));
-        p.outHandleY = static_cast<float>(child.getDouble("outY"));
-        p.inHandleX = static_cast<float>(child.getDouble("inX"));
-        p.inHandleY = static_cast<float>(child.getDouble("inY"));
-    }
-
-    // Fewer than two points keeps the diagonal.
-    if (n >= 2)
-        bend.setCurve({read.data(), n});
-    else
-        bend.sanitise();
-    return bend;
 }
 
 namespace {
@@ -291,7 +283,121 @@ template <typename T> bool takeNumber(std::string_view& text, char separator, T&
     return true;
 }
 
+/// A row's values, comma-separated, the neutral ones at its end left out.
+std::string rowText(const std::array<float, kMaxDynamicsSteps>& row) {
+    auto n = row.size();
+    while (n > 0 && row[n - 1] == 1.0f)
+        --n;
+    std::string out;
+    for (std::size_t k = 0; k < n; ++k) {
+        if (k > 0)
+            out += ',';
+        appendNumber(out, row[k]);
+    }
+    return out;
+}
+
+/// The row rowText() wrote, the steps it left out neutral; false on anything else.
+bool readRow(std::string_view text, std::array<float, kMaxDynamicsSteps>& row) {
+    row.fill(1.0f);
+    for (std::size_t k = 0; !text.empty(); ++k)
+        if (k == row.size() || !takeNumber(text, ',', row[k]))
+            return false;
+    return true;
+}
+
 }  // namespace
+
+StateNode writeTimeBend(const TimeBend& bend) {
+    StateNode node{std::string(kNodeType)};
+    node.setBool("on", bend.on);
+    node.setDouble("amount", bend.amount);
+    node.setInt("bars", bend.bars);
+    node.setInt("cycles", bend.cycles);
+    for (const auto& p : bend.curve()) {
+        StateNode point{std::string(kPointType)};
+        point.setDouble("x", p.phase);
+        point.setDouble("y", p.value);
+        if (p.curveType != kLinear)
+            point.setInt("type", p.curveType);
+        if (p.tension != 0.0f)
+            point.setDouble("tension", p.tension);
+        if (p.outHandleX != 0.0f || p.outHandleY != 0.0f) {
+            point.setDouble("outX", p.outHandleX);
+            point.setDouble("outY", p.outHandleY);
+        }
+        if (p.inHandleX != 0.0f || p.inHandleY != 0.0f) {
+            point.setDouble("inX", p.inHandleX);
+            point.setDouble("inY", p.inHandleY);
+        }
+        node.addChild(std::move(point));
+    }
+
+    // A bend with no dynamics writes the node it always has.
+    if (const auto& d = bend.dynamics; d != TimeBendDynamics{}) {
+        StateNode dynamics{std::string(kDynamicsType)};
+        dynamics.setBool("on", d.on);
+        dynamics.setDouble("amount", d.amount);
+        dynamics.setInt("rows", d.rows);
+        for (int r = 0; r < kDynamicsRows; ++r) {
+            if (!drawn(d.rows, r))
+                continue;
+            StateNode row{std::string(kRowType)};
+            row.setInt("index", r);
+            row.setString("values", rowText(d.values[static_cast<std::size_t>(r)]));
+            dynamics.addChild(std::move(row));
+        }
+        node.addChild(std::move(dynamics));
+    }
+    return node;
+}
+
+std::optional<TimeBend> readTimeBend(const StateNode& node) {
+    if (node.type() != kNodeType)
+        return std::nullopt;
+
+    TimeBend bend;
+    bend.on = node.getBool("on", false);
+    bend.amount = static_cast<float>(node.getDouble("amount", 1.0));
+    bend.bars = node.getInt("bars", 1);
+    bend.cycles = node.getInt("cycles", 1);
+
+    std::array<CurvePointData, kMaxTimeBendPoints> read{};
+    std::size_t n = 0;
+    for (const auto& child : node.children()) {
+        if (child.type() == kDynamicsType) {
+            auto& d = bend.dynamics;
+            d.on = child.getBool("on", false);
+            d.amount = static_cast<float>(child.getDouble("amount", 1.0));
+            d.rows = static_cast<std::uint32_t>(child.getInt("rows", 1));
+            for (const auto& row : child.children()) {
+                const int r = row.getInt("index", -1);
+                if (row.type() == kRowType && r >= 0 && r < kDynamicsRows &&
+                    !readRow(row.getString("values"), d.values[static_cast<std::size_t>(r)]))
+                    d.values[static_cast<std::size_t>(r)].fill(1.0f);
+            }
+            continue;
+        }
+        if (child.type() != kPointType || n == read.size())
+            continue;
+        auto& p = read[n++];
+        p.phase = static_cast<float>(child.getDouble("x"));
+        p.value = static_cast<float>(child.getDouble("y"));
+        p.curveType = child.getInt("type", kLinear);
+        p.tension = static_cast<float>(child.getDouble("tension"));
+        p.outHandleX = static_cast<float>(child.getDouble("outX"));
+        p.outHandleY = static_cast<float>(child.getDouble("outY"));
+        p.inHandleX = static_cast<float>(child.getDouble("inX"));
+        p.inHandleY = static_cast<float>(child.getDouble("inY"));
+    }
+
+    // Fewer than two points keeps the diagonal.
+    if (n >= 2)
+        bend.setCurve({read.data(), n});
+    else
+        bend.sanitise();
+    return bend;
+}
 
 std::string timeBendToText(const TimeBend& bend) {
     std::string out;
@@ -311,6 +417,15 @@ std::string timeBendToText(const TimeBend& bend) {
         appendNumber(out, p.inHandleY);
         out += ';';
     }
+
+    if (const auto& d = bend.dynamics; d != TimeBendDynamics{}) {
+        out += d.on ? "|1|" : "|0|";
+        appendNumber(out, d.amount);
+        out += '|' + std::to_string(d.rows) + '|';
+        for (int r = 0; r < kDynamicsRows; ++r)
+            if (drawn(d.rows, r))
+                out += rowText(d.values[static_cast<std::size_t>(r)]) + ';';
+    }
     return out;
 }
 
@@ -322,6 +437,11 @@ std::optional<TimeBend> timeBendFromText(std::string_view text) {
         return std::nullopt;
     bend.on = on != 0;
 
+    // The points run to the dynamics' '|', or to the end.
+    const auto bar = text.find('|');
+    auto dynamics = bar == std::string_view::npos ? std::string_view{} : text.substr(bar + 1);
+    text = text.substr(0, bar);
+
     std::array<CurvePointData, kMaxTimeBendPoints> read{};
     std::size_t n = 0;
     while (!text.empty()) {
@@ -332,6 +452,26 @@ std::optional<TimeBend> timeBendFromText(std::string_view text) {
             !takeNumber(text, ',', p.curveType) || !takeNumber(text, ',', p.tension) ||
             !takeNumber(text, ',', p.outHandleX) || !takeNumber(text, ',', p.outHandleY) ||
             !takeNumber(text, ',', p.inHandleX) || !takeNumber(text, ';', p.inHandleY))
+            return std::nullopt;
+    }
+
+    if (bar != std::string_view::npos) {
+        auto& d = bend.dynamics;
+        int dynamicsOn = 0;
+        if (!takeNumber(dynamics, '|', dynamicsOn) || !takeNumber(dynamics, '|', d.amount) ||
+            !takeNumber(dynamics, '|', d.rows))
+            return std::nullopt;
+        d.on = dynamicsOn != 0;
+        for (int r = 0; r < kDynamicsRows; ++r) {
+            if (!drawn(d.rows, r))
+                continue;
+            const auto end = dynamics.find(';');
+            if (end == std::string_view::npos ||
+                !readRow(dynamics.substr(0, end), d.values[static_cast<std::size_t>(r)]))
+                return std::nullopt;
+            dynamics.remove_prefix(end + 1);
+        }
+        if (!dynamics.empty())
             return std::nullopt;
     }
 

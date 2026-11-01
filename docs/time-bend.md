@@ -50,9 +50,31 @@ before grooves were bends. Step `k` of an `n`-step cycle becomes the point
 divide into it. A late downbeat is a hold at the cycle's start. An early one cannot be spelled,
 since the head would have to cross the cycle's top, and is read as on the grid.
 
+## Dynamics
+
+A groove is timing and dynamics (#31). `TimeBend::dynamics` holds how hard each step of the
+figure lands: one value per step, 0 to 1 with 1 neutral, never written into the steps. The figure
+is one pass of the bend on the pattern's grid, so timing and dynamics repeat together.
+
+- **Rows:** row 0 is All; rows 1 to 8 are the host's to key, by drum role say. `rows` has a bit
+  per drawn row, and a hit keyed to a row that is not drawn reads All.
+- **ON and AMOUNT:** `level(row, step)` is `1 - amount * (1 - value)`, and 1 when off.
+- **Steps:** `figureSteps(cycleBeats, stepBeats)` is the figure's length on the host's grid, at
+  most 64 (a 4-bar span in sixteenths); `figureStep(beat, cycleBeats, stepBeats)` is the step an
+  event at a pattern beat plays, the nearest grid step into its cycle. A host calls it with the
+  beat it hands `forEachBentHit`'s sources.
+
+The value is the host's to route: a per-hit modulation source latched at the hit, moving nothing
+until the user maps it. Hits the bend does not play, such as live notes, read neutral.
+
 ## State
 
 `writeTimeBend` / `readTimeBend` use a `TimeBend` node with `on`, `amount`, `bars` and `cycles`,
 and a `Point` child per point (`x`, `y`, and `type`, `tension`, `outX`/`outY`, `inX`/`inY` when
 set). Reading sanitises: fields are clamped, the ends pinned, and fewer than two points keep the
 diagonal.
+
+Set dynamics add a `Dynamics` child (`on`, `amount`, `rows`) with a `Row` child per drawn row
+(`index`, and `values` as comma-separated numbers, the neutral ones at the end left out). The text
+form appends `|on|amount|rows|` and a `;`-ended value list per drawn row. A bend with no dynamics
+writes the same node and text as before; a row not drawn reads back neutral.

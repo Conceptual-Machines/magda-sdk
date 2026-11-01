@@ -245,6 +245,100 @@ TEST_CASE("A bend survives its text", "[timebend]") {
         REQUIRE_FALSE(timeBendFromText(bad).has_value());
 }
 
+TEST_CASE("A hit's dynamics are its step's value, scaled by amount", "[timebend][dynamics]") {
+    TimeBendDynamics d;
+    d.values[0][2] = 0.5f;
+    d.values[3][2] = 0.0f;
+    REQUIRE(d.level(0, 2) == 1.0f);
+    REQUIRE_FALSE(d.isActive());
+
+    d.on = true;
+    REQUIRE(d.isActive());
+    REQUIRE(d.level(0, 2) == Approx(0.5f));
+    REQUIRE(d.level(0, 3) == 1.0f);
+    REQUIRE(d.level(0, -1) == 1.0f);
+    REQUIRE(d.level(0, 2 + kMaxDynamicsSteps) == Approx(0.5f));
+
+    // A row not drawn reads All; a drawn one its own.
+    REQUIRE(d.level(3, 2) == Approx(0.5f));
+    d.rows |= 1u << 3;
+    REQUIRE(d.level(3, 2) == 0.0f);
+    REQUIRE(d.level(99, 2) == Approx(0.5f));
+
+    d.amount = 0.5f;
+    REQUIRE(d.level(0, 2) == Approx(0.75f));
+    d.amount = 0.0f;
+    REQUIRE(d.level(3, 2) == 1.0f);
+    REQUIRE_FALSE(d.isActive());
+}
+
+TEST_CASE("A hit's figure step is the nearest grid step into its cycle", "[timebend][dynamics]") {
+    REQUIRE(figureSteps(4.0, 0.25) == 16);
+    REQUIRE(figureSteps(16.0, 0.125) == kMaxDynamicsSteps);
+    REQUIRE(figureSteps(4.0, 0.0) == 0);
+    REQUIRE(figureSteps(0.0, 0.25) == 0);
+
+    REQUIRE(figureStep(0.0, 4.0, 0.25) == 0);
+    REQUIRE(figureStep(0.24, 4.0, 0.25) == 1);
+    REQUIRE(figureStep(4.5, 4.0, 0.25) == 2);
+    REQUIRE(figureStep(3.99, 4.0, 0.25) == 0);
+    REQUIRE(figureStep(-0.25, 4.0, 0.25) == 15);
+    REQUIRE(figureStep(1.0, 4.0, 0.0) == -1);
+}
+
+TEST_CASE("Dynamics survive the state node and the text", "[timebend][dynamics]") {
+    auto bend = shaped(TimeBendShape::Rush);
+    bend.dynamics.on = true;
+    bend.dynamics.amount = 0.6f;
+    bend.dynamics.rows = 1u | (1u << 3);
+    bend.dynamics.values[0][0] = 0.5f;
+    bend.dynamics.values[0][5] = 0.123456789f;
+    bend.dynamics.values[3][1] = 0.0f;
+
+    const auto fromState = readTimeBend(writeTimeBend(bend));
+    REQUIRE(fromState.has_value());
+    REQUIRE(*fromState == bend);
+    const auto fromText = timeBendFromText(timeBendToText(bend));
+    REQUIRE(fromText.has_value());
+    REQUIRE(*fromText == bend);
+
+    // A bend with no dynamics writes what it always has.
+    const auto plain = shaped(TimeBendShape::Rush);
+    REQUIRE(writeTimeBend(plain).children().size() == 2);
+    REQUIRE(std::ranges::count(timeBendToText(plain), '|') == 4);
+
+    for (const auto* bad : {"0|1|1|1|0,0,0,0,0,0,0,0;1,1,0,0,0,0,0,0;|1|1|1|0.5",
+                            "0|1|1|1|0,0,0,0,0,0,0,0;1,1,0,0,0,0,0,0;|1|1|",
+                            "0|1|1|1|0,0,0,0,0,0,0,0;1,1,0,0,0,0,0,0;|1|1|1|x;"})
+        REQUIRE_FALSE(timeBendFromText(bad).has_value());
+}
+
+TEST_CASE("Dynamics read from bad state are clamped", "[timebend][dynamics]") {
+    magda::sdk::StateNode node{"TimeBend"};
+    magda::sdk::StateNode dynamics{"Dynamics"};
+    dynamics.setBool("on", true);
+    dynamics.setDouble("amount", 5.0);
+    dynamics.setInt("rows", 0x7fff);
+    for (const auto& [index, values] : {std::pair{0, "3,-1,0.5"}, {2, "0.25"}, {12, "0"}}) {
+        magda::sdk::StateNode row{"Row"};
+        row.setInt("index", index);
+        row.setString("values", values);
+        dynamics.addChild(std::move(row));
+    }
+    node.addChild(std::move(dynamics));
+
+    const auto bend = readTimeBend(node);
+    REQUIRE(bend.has_value());
+    const auto& d = bend->dynamics;
+    REQUIRE(d.amount == 1.0f);
+    REQUIRE(d.rows == (1u << kDynamicsRows) - 1u);
+    REQUIRE(d.values[0][0] == 1.0f);
+    REQUIRE(d.values[0][1] == 0.0f);
+    REQUIRE(d.values[0][2] == 0.5f);
+    REQUIRE(d.values[2][0] == 0.25f);
+    REQUIRE(bend->count == 2);
+}
+
 TEST_CASE("A straight segment is crossed exactly where it is drawn", "[timebend]") {
     // A breakpoint off the crossing grid: step 1 of a 3-step cycle must play at x = 0.3.
     const TimeBendKnot knots[] = {{0.0f, 0.0f}, {0.3f, 1.0f / 3.0f}, {1.0f, 1.0f}};
