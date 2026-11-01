@@ -50,12 +50,23 @@ before grooves were bends. Step `k` of an `n`-step cycle becomes the point
 divide into it. A late downbeat is a hold at the cycle's start. An early one cannot be spelled,
 since the head would have to cross the cycle's top, and is read as on the grid.
 
+## Grooves from a recording
+
+`extractGroove(audio, sampleRate, settings)` (`sequencer/GrooveExtraction.hpp`) reads a groove off a
+recorded loop, for `grooveTimeBend`. The hits are the loop's transients (`detectTransients`, its
+spacing tightened to half a grid step). The grid is the loop's tempo (given, or its length over
+`bars` bars) at `notesPerBeat` steps a beat, from the first hit when that hit is within half a step
+of the loop's start. Each hit belongs to its nearest step; the lateness of a step of the figure
+(one bar by default) is its hits' mean shift over every repeat, in grooveTimeBend's units, and its
+accent the hits' mean level against the loudest step's. Steps with no hit stay on the grid. The
+overload on `GrooveHit`s takes onsets found any other way.
+
 ## Dynamics
 
 A groove is timing and, optionally, dynamics (#31). `TimeBend::dynamics` holds how hard each step
 of the figure lands, or nothing for a groove without them: one value per step, 0 to 1 with 1
-neutral, never written into the steps. The figure
-is one pass of the bend on the pattern's grid, so timing and dynamics repeat together.
+neutral, never written into the steps. The figure is one pass of the bend on the pattern's grid,
+so timing and dynamics repeat together.
 
 - **Rows:** row 0 is All; rows 1 to 8 are the host's to key, by drum role say. `rows` has a bit
   per drawn row, and a hit keyed to a row that is not drawn reads All.
