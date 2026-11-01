@@ -243,6 +243,15 @@ TEST_CASE("A corner turned back into a bend passes its apex's value mid-segment"
           Approx(0.75f));
 }
 
+TEST_CASE("Double-clicking a corner's handle turns it back into a straight bend", "[curveedit]") {
+    auto editor = cornered();
+    CHECK(editor.doubleClick(at(37, 38)).commit == Commit::Edit);
+    const auto points = editor.points();
+    CHECK(points[0].curveType == static_cast<int>(CurveInterpolation::Linear));
+    CHECK(points[0].outHandleX == Approx(0.25f));
+    CHECK(points[0].outHandleY == Approx(0.5f).margin(0.01f));
+}
+
 TEST_CASE("Moving one end of a corner keeps its apex's fraction and value", "[curveedit]") {
     auto editor = cornered();
     editor.pointerDown(at(100, 16));

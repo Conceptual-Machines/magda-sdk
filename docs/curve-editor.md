@@ -47,7 +47,7 @@ markers, then the canvas.
 | Shift-click empty space | Stamps a step cell one X grid step wide: the point before it turns Step, a Step point at the click, a Linear point at the cell's end returning to the previous value. Off with `setAllowSteps(false)`, which a time bend uses. |
 | Cmd-drag | Pencil: a point every 10 pixels and at the end, one edit. |
 | Drag a segment handle | Linear: bends vertically, the cursor being the on-curve midpoint. Hard corner: moves the apex, kept inside the segment and the range. |
-| Double-click a segment handle | Flattens the segment. |
+| Double-click a segment handle | Flattens the segment; a hard corner turns back into a bend. |
 | Right-click a segment or its handle | Toggles a hard corner, its apex where the curve passed; back to a bend, the curve passes the apex's value at the segment's middle. |
 | Drag a loop marker (top 12 px) | Moves it, snapped to the X grid when loop snap is on, at least 0.02 from the other. |
 | Delete, Backspace | Deletes the selection, in model order, down to two points. |

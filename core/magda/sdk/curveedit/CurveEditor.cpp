@@ -1038,14 +1038,17 @@ CurveEditorResponse CurveEditor::doubleClick(const CurveEditorPointer& pointer) 
         case Target::Handle:
             if (!pointer.primary || pointer.mods.popup)
                 break;
-            // Flattens the segment: the shaper goes to the straight line's midpoint.
+            // Flattens the segment, a hard corner back to a bend: the shaper goes to the straight
+            // line's midpoint.
             for (std::size_t i = 0; i + 1 < points_.size(); ++i) {
                 if (points_[i].id != hit.id)
                     continue;
+                beginEdit(response);
+                if (points_[i].interpolation == CurveInterpolation::HardCorner)
+                    points_[i].interpolation = CurveInterpolation::Linear;
                 const double midX = 0.5 * (points_[i].x + points_[i + 1].x);
                 const double midY = 0.5 * (points_[i].y + points_[i + 1].y);
                 if (const auto shaper = shaperFromPixel(hit.id, xToPixel(midX), yToPixel(midY))) {
-                    beginEdit(response);
                     applyShaper(hit.id, shaper->first, shaper->second);
                     endEdit(response, CurveEditorResponse::Commit::Edit);
                 }
