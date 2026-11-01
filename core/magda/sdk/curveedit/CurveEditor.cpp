@@ -146,6 +146,18 @@ std::vector<CurvePointData> CurveEditor::effectivePoints() const {
         } else if (i > 0 && shaperPreviewId_ == points_[i - 1].id) {
             p.inHandleX = shaperPreviewX_ - points_[i].x;
             p.inHandleY = shaperPreviewY_ - points_[i].y;
+        } else if (previewLead_) {
+            // A moving corner's handles are re-read from where its apex goes.
+            if (i + 1 < points_.size() && hasStoredCorner(points_[i], points_[i + 1])) {
+                const auto [ax, ay] = shaperPosition(points_[i], points_[i + 1]);
+                p.outHandleX = ax - p.x;
+                p.outHandleY = ay - p.y;
+            }
+            if (i > 0 && hasStoredCorner(points_[i - 1], points_[i])) {
+                const auto [ax, ay] = shaperPosition(points_[i - 1], points_[i]);
+                p.inHandleX = ax - p.x;
+                p.inHandleY = ay - p.y;
+            }
         }
         out.push_back(toData(p));
     }
@@ -276,22 +288,42 @@ bool CurveEditor::hasStoredShaper(const CurveEditorPoint& p1, const CurveEditorP
            std::abs(p2.inHandleX) > kShaperEpsilon || std::abs(p2.inHandleY) > kShaperEpsilon;
 }
 
+bool CurveEditor::hasStoredCorner(const CurveEditorPoint& p1, const CurveEditorPoint& p2) const {
+    return p1.interpolation == CurveInterpolation::HardCorner && hasStoredShaper(p1, p2);
+}
+
+std::pair<double, double> CurveEditor::movedApex(
+    const CurveEditorPoint& p1, const CurveEditorPoint& p2,
+    const std::map<std::uint32_t, std::pair<double, double>>& moved) const {
+    // The apex is on the curve, so it stays in range.
+    const double apexX = limit(p1.x, p2.x, p1.x + p1.outHandleX);
+    const double apexY = std::clamp(p1.y + p1.outHandleY, 0.0, 1.0);
+    const double span = p2.x - p1.x;
+    const double fraction = std::abs(span) > kShaperEpsilon ? (apexX - p1.x) / span : 0.5;
+
+    const auto at = [&](const CurveEditorPoint& p) {
+        const auto it = moved.find(p.id);
+        return it != moved.end() ? it->second : std::pair{p.x, p.y};
+    };
+    const auto [x1, y1] = at(p1);
+    const auto [x2, y2] = at(p2);
+    const bool together = moved.contains(p1.id) && moved.contains(p2.id);
+    return {x1 + fraction * (x2 - x1), std::clamp(together ? apexY + y1 - p1.y : apexY, 0.0, 1.0)};
+}
+
 std::pair<double, double> CurveEditor::shaperPosition(const CurveEditorPoint& p1,
                                                       const CurveEditorPoint& p2) const {
     if (shaperPreviewId_ == p1.id)
         return {shaperPreviewX_, shaperPreviewY_};
 
+    if (hasStoredCorner(p1, p2))
+        return movedApex(p1, p2, previewPositions_);
+
     const auto [p1x, p1y] = effectivePosition(p1);
     const auto [p2x, p2y] = effectivePosition(p2);
 
-    if (hasStoredShaper(p1, p2)) {
-        const double sx = limit(p1x, p2x, p1x + p1.outHandleX);
-        const double sy = p1y + p1.outHandleY;
-        // A hard corner's apex is on the curve, so it stays in range; a Linear control may not.
-        if (p1.interpolation == CurveInterpolation::HardCorner)
-            return {sx, std::clamp(sy, 0.0, 1.0)};
-        return {sx, sy};
-    }
+    if (hasStoredShaper(p1, p2))
+        return {limit(p1x, p2x, p1x + p1.outHandleX), p1y + p1.outHandleY};
 
     double sy = (p1y + p2y) * 0.5;
     if (std::abs(p1.tension) > 0.001) {
@@ -515,10 +547,23 @@ void CurveEditor::commitPointMove(std::uint32_t id, double x, double y) {
     }
     multiStart_.clear();
 
+    std::map<std::uint32_t, std::pair<double, double>> apexes;
+    for (std::size_t i = 0; i + 1 < points_.size(); ++i) {
+        const auto& p1 = points_[i];
+        const auto& p2 = points_[i + 1];
+        if (hasStoredCorner(p1, p2) && (finals.contains(p1.id) || finals.contains(p2.id)))
+            apexes[p1.id] = movedApex(p1, p2, finals);
+    }
+
     for (auto& p : points_)
         if (const auto it = finals.find(p.id); it != finals.end())
             std::tie(p.x, p.y) = it->second;
     sortPoints();
+
+    for (std::size_t i = 0; i + 1 < points_.size(); ++i)
+        if (const auto it = apexes.find(points_[i].id); it != apexes.end())
+            applyShaper(it->first, limit(points_[i].x, points_[i + 1].x, it->second.first),
+                        it->second.second);
 }
 
 std::optional<std::pair<double, double>> CurveEditor::shaperFromPixel(std::uint32_t id, double px,
@@ -571,7 +616,13 @@ void CurveEditor::toggleHardCorner(std::uint32_t id) {
         if (p.id != id)
             continue;
         if (p.interpolation == CurveInterpolation::HardCorner) {
+            const bool stored = i + 1 < points_.size() && hasStoredShaper(p, points_[i + 1]);
+            const double apexY = stored ? shaperPosition(p, points_[i + 1]).second : 0.0;
             p.interpolation = CurveInterpolation::Linear;
+            // Back to a bend that passes the apex's value at the segment's middle.
+            if (stored)
+                applyShaper(id, 0.5 * (p.x + points_[i + 1].x),
+                            2.0 * apexY - 0.5 * (p.y + points_[i + 1].y));
             return;
         }
         // The corner starts where the smooth curve already passes, keeping the bend.
@@ -596,7 +647,25 @@ void CurveEditor::addPoint(double x, double y, CurveInterpolation interpolation)
     p.y = std::clamp(y, 0.0, 1.0);
     p.interpolation = interpolation;
     const auto at = std::ranges::lower_bound(points_, p.x, {}, &CurveEditorPoint::x);
+    const auto i = static_cast<std::size_t>(at - points_.begin());
+    const bool splitsCorner = interpolation == CurveInterpolation::Linear && i > 0 &&
+                              i < points_.size() && hasStoredCorner(points_[i - 1], points_[i]);
+    const auto apex =
+        splitsCorner ? shaperPosition(points_[i - 1], points_[i]) : std::pair{0.0, 0.0};
     points_.insert(at, p);
+    if (!splitsCorner)
+        return;
+
+    // The apex stays put: the corner keeps to the apex's side, the other side is straight.
+    auto& before = points_[i - 1];
+    auto& added = points_[i];
+    points_[i + 1].inHandleX = points_[i + 1].inHandleY = 0.0;
+    if (apex.first > added.x) {
+        before.interpolation = CurveInterpolation::Linear;
+        before.outHandleX = before.outHandleY = 0.0;
+        added.interpolation = CurveInterpolation::HardCorner;
+    }
+    applyShaper(apex.first > added.x ? added.id : before.id, apex.first, apex.second);
 }
 
 bool CurveEditor::deletePoints(const std::set<std::uint32_t>& ids) {

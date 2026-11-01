@@ -37,6 +37,17 @@ CurveEditor triangle() {
     return editorWith({point(0, 0), point(0.5f, 1), point(1, 0)});
 }
 
+/// 0 -> 1 -> 0 with a hard corner on the first segment, its apex at (0.125, 0.75).
+CurveEditor cornered() {
+    auto corner = point(0, 0, static_cast<int>(CurveInterpolation::HardCorner));
+    corner.outHandleX = 0.125f;
+    corner.outHandleY = 0.75f;
+    auto peak = point(0.5f, 1);
+    peak.inHandleX = -0.375f;
+    peak.inHandleY = -0.25f;
+    return editorWith({corner, peak, point(1, 0)});
+}
+
 CurveEditorPointer at(float x, float y) {
     CurveEditorPointer p;
     p.x = x;
@@ -216,7 +227,95 @@ TEST_CASE("Right-click turns a bent segment into a hard corner at its midpoint",
     CHECK(points[1].inHandleX == Approx(-0.25f));
 
     click(editor, popup(at(40, 100)));
-    CHECK(editor.points()[0].curveType == static_cast<int>(CurveInterpolation::Linear));
+    const auto back = editor.points();
+    CHECK(back[0].curveType == static_cast<int>(CurveInterpolation::Linear));
+    CHECK(magda::sdk::curvemath::evalSegment(0.0f, 1.0f, back[0].outHandleY, 0.6f, true, 0.5f) ==
+          Approx(apexY));
+}
+
+TEST_CASE("A corner turned back into a bend passes its apex's value mid-segment", "[curveedit]") {
+    auto editor = cornered();
+    click(editor, popup(at(40, 100)));
+    const auto points = editor.points();
+    CHECK(points[0].curveType == static_cast<int>(CurveInterpolation::Linear));
+    CHECK(points[0].outHandleX == Approx(0.25f));
+    CHECK(magda::sdk::curvemath::evalSegment(0.0f, 1.0f, points[0].outHandleY, 0.0f, true, 0.5f) ==
+          Approx(0.75f));
+}
+
+TEST_CASE("Moving one end of a corner keeps its apex's fraction and value", "[curveedit]") {
+    auto editor = cornered();
+    editor.pointerDown(at(100, 16));
+    editor.pointerDrag(at(142, 38));
+    const auto preview = editor.effectivePoints();
+    CHECK(preview[0].outHandleX == Approx(0.1875f));
+    CHECK(preview[0].outHandleY == Approx(0.75f));
+    CHECK(preview[1].inHandleX == Approx(-0.5625f));
+    CHECK(preview[1].inHandleY == Approx(0.0f));
+
+    editor.pointerUp(at(142, 38));
+    auto points = editor.points();
+    CHECK(points[0].outHandleX == Approx(0.1875f));
+    CHECK(points[0].outHandleY == Approx(0.75f));
+    CHECK(points[1].inHandleX == Approx(-0.5625f));
+
+    drag(editor, at(16, 104), at(16, 60));
+    points = editor.points();
+    CHECK(points[0].value == Approx(0.5f));
+    CHECK(points[0].outHandleX == Approx(0.1875f));
+    CHECK(points[0].outHandleY == Approx(0.25f));
+}
+
+TEST_CASE("A corner between two selected points moves with them", "[curveedit]") {
+    auto corner = point(0.25f, 0.25f, static_cast<int>(CurveInterpolation::HardCorner));
+    corner.outHandleX = 0.125f;
+    corner.outHandleY = 0.5f;
+    auto end = point(0.5f, 0.5f);
+    end.inHandleX = -0.125f;
+    end.inHandleY = 0.25f;
+    auto editor = editorWith({point(0, 0), corner, end, point(1, 0)});
+    click(editor, at(58, 82));
+    editor.pointerDown(withShift(at(100, 60)));
+    editor.pointerDrag(withShift(at(121, 38)));
+    editor.pointerUp(withShift(at(121, 38)));
+    const auto points = editor.points();
+    CHECK(points[1].phase == Approx(0.375f));
+    CHECK(points[1].outHandleX == Approx(0.125f));
+    CHECK(points[1].outHandleY == Approx(0.5f));
+    CHECK(points[2].inHandleX == Approx(-0.125f));
+    CHECK(points[2].inHandleY == Approx(0.25f));
+}
+
+TEST_CASE("A point added in a corner's segment leaves its apex where it was", "[curveedit]") {
+    constexpr auto hardCorner = static_cast<int>(CurveInterpolation::HardCorner);
+    SECTION("past the apex: the corner stays, the new segment is straight") {
+        auto editor = cornered();
+        editor.doubleClick(at(58, 60));
+        const auto points = editor.points();
+        REQUIRE(points.size() == 4);
+        CHECK(points[0].curveType == hardCorner);
+        CHECK(points[0].outHandleX == Approx(0.125f));
+        CHECK(points[0].outHandleY == Approx(0.75f));
+        CHECK(points[1].curveType == static_cast<int>(CurveInterpolation::Linear));
+        CHECK(points[1].inHandleX == Approx(-0.125f));
+        CHECK(points[1].inHandleY == Approx(0.25f));
+        CHECK(points[2].inHandleX == 0.0f);
+        CHECK(points[2].inHandleY == 0.0f);
+    }
+    SECTION("before the apex: the corner moves to the new point") {
+        auto editor = cornered();
+        editor.doubleClick(at(26, 82));
+        const auto points = editor.points();
+        REQUIRE(points.size() == 4);
+        CHECK(points[0].curveType == static_cast<int>(CurveInterpolation::Linear));
+        CHECK(points[0].outHandleX == 0.0f);
+        CHECK(points[0].outHandleY == 0.0f);
+        CHECK(points[1].curveType == hardCorner);
+        CHECK(points[1].phase + points[1].outHandleX == Approx(0.125f));
+        CHECK(points[1].value + points[1].outHandleY == Approx(0.75f));
+        CHECK(points[2].inHandleX == Approx(-0.375f));
+        CHECK(points[2].inHandleY == Approx(-0.25f));
+    }
 }
 
 TEST_CASE("Dragging a segment handle bends it; a double-click flattens it", "[curveedit]") {
