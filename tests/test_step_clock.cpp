@@ -412,6 +412,26 @@ TEST_CASE("StepClock names the step that plays after the block", "[stepclock][be
     REQUIRE(held.clock.getNextStep() == 1);
 }
 
+TEST_CASE("StepClock gives each step its dynamics level", "[stepclock][dynamics]") {
+    magda::sdk::sequencer::TimeBend bend;
+    auto& dynamics = bend.dynamics.emplace();
+    dynamics.on = true;
+    dynamics.values[0][1] = 0.25f;
+    dynamics.values[0][17] = 0.0f;
+
+    // A sixteenth grid over a one-bar cycle: step 1 of every bar, swung or not, reads 0.25.
+    BlockRunner runner;
+    runner.block(8.0, 16, 256, bend, 0.0f, 16, 0.5f);
+    REQUIRE(runner.events.size() == 32);
+    for (size_t i = 0; i < runner.events.size(); ++i)
+        REQUIRE(runner.events[i].dynamics == (i % 16 == 1 ? 0.25f : 1.0f));
+
+    BlockRunner plain;
+    plain.block(1.0, 16, 256, {});
+    for (const auto& event : plain.events)
+        REQUIRE(event.dynamics == 1.0f);
+}
+
 TEST_CASE("StepClock's Random direction is fixed by its seed and the tick",
           "[stepclock][process]") {
     StepClock a;

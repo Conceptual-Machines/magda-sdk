@@ -53,9 +53,10 @@ class StepClock {
 
     // --- Step event emitted by processBlock ---
     struct StepEvent {
-        int stepIndex;        // Which step fired (0-based, within sequence length)
-        double beatPosition;  // Absolute beat position of this step
-        double timeInBlock;   // Time offset in seconds from block start
+        int stepIndex;          // Which step fired (0-based, within sequence length)
+        double beatPosition;    // Absolute beat position of this step
+        double timeInBlock;     // Time offset in seconds from block start
+        float dynamics = 1.0f;  // The step's time bend dynamics level; 1 when the bend has none
     };
 
     StepClock();

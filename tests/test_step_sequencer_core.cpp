@@ -150,6 +150,35 @@ TEST_CASE("MonoStepSequencer walks its pattern in order", "[sequencer][mono]") {
     REQUIRE(notesAreBalanced(runner.recorder.played));
 }
 
+TEST_CASE("The step cores hand each note-on its dynamics level", "[sequencer][dynamics]") {
+    struct DynamicsSink : seq::NoteSink {
+        std::vector<float> levels;
+        void addNoteEvent(const seq::NoteEvent& event) override {
+            if (event.isNoteOn)
+                levels.push_back(event.dynamics);
+        }
+    };
+
+    auto params = monoParams();
+    auto& dynamics = params.bend.dynamics.emplace();
+    dynamics.on = true;
+    dynamics.values[0][2] = 0.5f;
+
+    seq::MonoStepSequencer sequencer;
+    sequencer.setSampleRate(kSampleRate);
+    DynamicsSink sink;
+    double beat = 0.0;
+    for (int i = 0; i < blocksFor(1.0); ++i, beat += kBeatsPerBlock)
+        sequencer.processBlock({.startBeat = beat,
+                                .endBeat = beat + kBeatsPerBlock,
+                                .isPlaying = true,
+                                .numSamples = kBlockSamples},
+                               fourNotePattern(), params, sink);
+    REQUIRE(sink.levels.size() >= 4);
+    REQUIRE(sink.levels[0] == 1.0f);
+    REQUIRE(sink.levels[2] == 0.5f);
+}
+
 TEST_CASE("MonoStepSequencer shifts a step by whole octaves", "[sequencer][mono]") {
     auto pattern = fourNotePattern();
     pattern.steps[1].octaveShift = 1;
