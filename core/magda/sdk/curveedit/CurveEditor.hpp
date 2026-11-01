@@ -216,6 +216,12 @@ class CurveEditor {
     std::vector<const CurveEditorPoint*> renderOrder() const;
     std::pair<double, double> effectivePosition(const CurveEditorPoint& p) const;
     bool hasStoredShaper(const CurveEditorPoint& p1, const CurveEditorPoint& p2) const;
+    bool hasStoredCorner(const CurveEditorPoint& p1, const CurveEditorPoint& p2) const;
+    /// The apex of the corner from @p p1 to @p p2 once points sit at @p moved: at the same
+    /// fraction of its segment, and at the same value unless both ends move.
+    std::pair<double, double> movedApex(
+        const CurveEditorPoint& p1, const CurveEditorPoint& p2,
+        const std::map<std::uint32_t, std::pair<double, double>>& moved) const;
     std::pair<double, double> shaperPosition(const CurveEditorPoint& p1,
                                              const CurveEditorPoint& p2) const;
     std::pair<double, double> handlePosition(const CurveEditorPoint& p1,
