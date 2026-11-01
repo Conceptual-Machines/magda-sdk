@@ -163,7 +163,8 @@ void PolyStepSequencer::processBlock(const StepClock::BlockTiming& timing,
             sink.addNoteEvent({.timeInBlock = event.timeInBlock,
                                .noteNumber = note.noteNumber,
                                .velocity = velocity,
-                               .isNoteOn = true});
+                               .isNoteOn = true,
+                               .dynamics = event.dynamics});
             soundingNotes_[static_cast<size_t>(n)] = note.noteNumber;
             displayVelocity = velocity;
         }

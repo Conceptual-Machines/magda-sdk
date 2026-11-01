@@ -78,6 +78,8 @@ so timing and dynamics repeat together.
 
 The value is the host's to route: a per-hit modulation source latched at the hit, moving nothing
 until the user maps it. Hits the bend does not play, such as live notes, read neutral.
+`StepClock` puts each step's level in `StepEvent::dynamics`, from the tick's unswung grid step, and
+the step cores pass it on in `NoteEvent::dynamics`.
 
 ## State
 

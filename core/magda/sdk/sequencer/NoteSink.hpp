@@ -18,6 +18,8 @@ struct NoteEvent {
     int noteNumber = 0;
     int velocity = 0;  ///< 1-127 on a note-on; unused on a note-off
     bool isNoteOn = false;
+    /// A note-on's time bend dynamics level (TimeBendDynamics::level): 1 is neutral.
+    float dynamics = 1.0f;
 };
 
 /// Where a sequencer writes the notes it produces.

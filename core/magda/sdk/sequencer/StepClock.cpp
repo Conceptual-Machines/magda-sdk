@@ -149,9 +149,13 @@ int StepClock::processBlock(const BlockTiming& timing, Rate rate, Direction dire
     for (int i = 0; i < written; ++i) {
         const auto& hit = found[static_cast<std::size_t>(i)];
         const double frac = (hit.beat - t0) / (t1 - t0);
+        // The tick's own grid step, unswung, is its step of the dynamics' figure.
+        const int figure =
+            figureStep(static_cast<double>(hit.tick) * stepBeats, cycleBeats, stepBeats);
         events[i] = {.stepIndex = stepForTick(hit.tick, numSteps, direction),
                      .beatPosition = hit.beat,
-                     .timeInBlock = std::min(frac * blockSecs, lastSampleSecs)};
+                     .timeInBlock = std::min(frac * blockSecs, lastSampleSecs),
+                     .dynamics = bend.dynamics ? bend.dynamics->level(0, figure) : 1.0f};
     }
     if (written > 0) {
         const auto& last = found[static_cast<std::size_t>(written - 1)];

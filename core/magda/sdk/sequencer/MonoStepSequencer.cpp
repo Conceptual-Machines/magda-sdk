@@ -144,7 +144,8 @@ void MonoStepSequencer::processBlock(const StepClock::BlockTiming& timing,
         sink.addNoteEvent({.timeInBlock = event.timeInBlock,
                            .noteNumber = noteNumber,
                            .velocity = velocity,
-                           .isNoteOn = true});
+                           .isNoteOn = true,
+                           .dynamics = event.dynamics});
         soundingNote_ = noteNumber;
         soundingVelocity_ = velocity;
         tieHoldCountdown_ = 0;
