@@ -52,8 +52,9 @@ since the head would have to cross the cycle's top, and is read as on the grid.
 
 ## Dynamics
 
-A groove is timing and dynamics (#31). `TimeBend::dynamics` holds how hard each step of the
-figure lands: one value per step, 0 to 1 with 1 neutral, never written into the steps. The figure
+A groove is timing and, optionally, dynamics (#31). `TimeBend::dynamics` holds how hard each step
+of the figure lands, or nothing for a groove without them: one value per step, 0 to 1 with 1
+neutral, never written into the steps. The figure
 is one pass of the bend on the pattern's grid, so timing and dynamics repeat together.
 
 - **Rows:** row 0 is All; rows 1 to 8 are the host's to key, by drum role say. `rows` has a bit
@@ -74,7 +75,8 @@ and a `Point` child per point (`x`, `y`, and `type`, `tension`, `outX`/`outY`, `
 set). Reading sanitises: fields are clamped, the ends pinned, and fewer than two points keep the
 diagonal.
 
-Set dynamics add a `Dynamics` child (`on`, `amount`, `rows`) with a `Row` child per drawn row
+Dynamics, when the bend has them, add a `Dynamics` child (`on`, `amount`, `rows`) with a `Row` child per drawn row
 (`index`, and `values` as comma-separated numbers, the neutral ones at the end left out). The text
 form appends `|on|amount|rows|` and a `;`-ended value list per drawn row. A bend with no dynamics
-writes the same node and text as before; a row not drawn reads back neutral.
+writes the same node and text as before and reads back with none; a row not drawn reads back
+neutral.

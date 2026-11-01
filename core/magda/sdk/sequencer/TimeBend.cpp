@@ -92,7 +92,8 @@ bool TimeBend::isActive() const {
 }
 
 void TimeBend::sanitise() {
-    dynamics.sanitise();
+    if (dynamics)
+        dynamics->sanitise();
     amount = std::isfinite(amount) ? std::clamp(amount, 0.0f, 1.0f) : 1.0f;
     bars = clampBars(bars);
     cycles = std::clamp(cycles, 1, kMaxTimeBendCycles);
@@ -334,17 +335,17 @@ StateNode writeTimeBend(const TimeBend& bend) {
     }
 
     // A bend with no dynamics writes the node it always has.
-    if (const auto& d = bend.dynamics; d != TimeBendDynamics{}) {
+    if (const auto& d = bend.dynamics) {
         StateNode dynamics{std::string(kDynamicsType)};
-        dynamics.setBool("on", d.on);
-        dynamics.setDouble("amount", d.amount);
-        dynamics.setInt("rows", d.rows);
+        dynamics.setBool("on", d->on);
+        dynamics.setDouble("amount", d->amount);
+        dynamics.setInt("rows", d->rows);
         for (int r = 0; r < kDynamicsRows; ++r) {
-            if (!drawn(d.rows, r))
+            if (!drawn(d->rows, r))
                 continue;
             StateNode row{std::string(kRowType)};
             row.setInt("index", r);
-            row.setString("values", rowText(d.values[static_cast<std::size_t>(r)]));
+            row.setString("values", rowText(d->values[static_cast<std::size_t>(r)]));
             dynamics.addChild(std::move(row));
         }
         node.addChild(std::move(dynamics));
@@ -366,7 +367,7 @@ std::optional<TimeBend> readTimeBend(const StateNode& node) {
     std::size_t n = 0;
     for (const auto& child : node.children()) {
         if (child.type() == kDynamicsType) {
-            auto& d = bend.dynamics;
+            auto& d = bend.dynamics.emplace();
             d.on = child.getBool("on", false);
             d.amount = static_cast<float>(child.getDouble("amount", 1.0));
             d.rows = static_cast<std::uint32_t>(child.getInt("rows", 1));
@@ -418,13 +419,13 @@ std::string timeBendToText(const TimeBend& bend) {
         out += ';';
     }
 
-    if (const auto& d = bend.dynamics; d != TimeBendDynamics{}) {
-        out += d.on ? "|1|" : "|0|";
-        appendNumber(out, d.amount);
-        out += '|' + std::to_string(d.rows) + '|';
+    if (const auto& d = bend.dynamics) {
+        out += d->on ? "|1|" : "|0|";
+        appendNumber(out, d->amount);
+        out += '|' + std::to_string(d->rows) + '|';
         for (int r = 0; r < kDynamicsRows; ++r)
-            if (drawn(d.rows, r))
-                out += rowText(d.values[static_cast<std::size_t>(r)]) + ';';
+            if (drawn(d->rows, r))
+                out += rowText(d->values[static_cast<std::size_t>(r)]) + ';';
     }
     return out;
 }
@@ -456,7 +457,7 @@ std::optional<TimeBend> timeBendFromText(std::string_view text) {
     }
 
     if (bar != std::string_view::npos) {
-        auto& d = bend.dynamics;
+        auto& d = bend.dynamics.emplace();
         int dynamicsOn = 0;
         if (!takeNumber(dynamics, '|', dynamicsOn) || !takeNumber(dynamics, '|', d.amount) ||
             !takeNumber(dynamics, '|', d.rows))

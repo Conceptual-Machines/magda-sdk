@@ -102,7 +102,8 @@ struct TimeBend {
     std::array<CurvePointData, kMaxTimeBendPoints> points{
         {{.phase = 0.0f, .value = 0.0f}, {.phase = 1.0f, .value = 1.0f}}};
     int count = 2;
-    TimeBendDynamics dynamics;
+    /// How hard each step lands; a groove may have none.
+    std::optional<TimeBendDynamics> dynamics;
 
     std::span<const CurvePointData> curve() const {
         return {points.data(), static_cast<std::size_t>(std::clamp(count, 0, kMaxTimeBendPoints))};
@@ -170,7 +171,7 @@ std::optional<TimeBend> readTimeBend(const StateNode& node);
  * @brief @p bend as one line of text, for a host whose settings are flat properties.
  *
  * `on|amount|bars|cycles|x,y,type,tension,outX,outY,inX,inY;...`, every number round-tripping,
- * then `|on|amount|rows|v,v,...;...` with a value list per drawn row when the dynamics are set.
+ * then `|on|amount|rows|v,v,...;...` with a value list per drawn row when it has dynamics.
  */
 std::string timeBendToText(const TimeBend& bend);
 

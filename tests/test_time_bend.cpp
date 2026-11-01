@@ -288,12 +288,13 @@ TEST_CASE("A hit's figure step is the nearest grid step into its cycle", "[timeb
 
 TEST_CASE("Dynamics survive the state node and the text", "[timebend][dynamics]") {
     auto bend = shaped(TimeBendShape::Rush);
-    bend.dynamics.on = true;
-    bend.dynamics.amount = 0.6f;
-    bend.dynamics.rows = 1u | (1u << 3);
-    bend.dynamics.values[0][0] = 0.5f;
-    bend.dynamics.values[0][5] = 0.123456789f;
-    bend.dynamics.values[3][1] = 0.0f;
+    auto& dynamics = bend.dynamics.emplace();
+    dynamics.on = true;
+    dynamics.amount = 0.6f;
+    dynamics.rows = 1u | (1u << 3);
+    dynamics.values[0][0] = 0.5f;
+    dynamics.values[0][5] = 0.123456789f;
+    dynamics.values[3][1] = 0.0f;
 
     const auto fromState = readTimeBend(writeTimeBend(bend));
     REQUIRE(fromState.has_value());
@@ -302,10 +303,14 @@ TEST_CASE("Dynamics survive the state node and the text", "[timebend][dynamics]"
     REQUIRE(fromText.has_value());
     REQUIRE(*fromText == bend);
 
-    // A bend with no dynamics writes what it always has.
-    const auto plain = shaped(TimeBendShape::Rush);
+    // A bend with no dynamics writes what it always has; neutral ones are still there.
+    auto plain = shaped(TimeBendShape::Rush);
     REQUIRE(writeTimeBend(plain).children().size() == 2);
     REQUIRE(std::ranges::count(timeBendToText(plain), '|') == 4);
+    REQUIRE_FALSE(readTimeBend(writeTimeBend(plain))->dynamics.has_value());
+    plain.dynamics.emplace();
+    REQUIRE(readTimeBend(writeTimeBend(plain)) == plain);
+    REQUIRE(timeBendFromText(timeBendToText(plain)) == plain);
 
     for (const auto* bad : {"0|1|1|1|0,0,0,0,0,0,0,0;1,1,0,0,0,0,0,0;|1|1|1|0.5",
                             "0|1|1|1|0,0,0,0,0,0,0,0;1,1,0,0,0,0,0,0;|1|1|",
@@ -329,7 +334,8 @@ TEST_CASE("Dynamics read from bad state are clamped", "[timebend][dynamics]") {
 
     const auto bend = readTimeBend(node);
     REQUIRE(bend.has_value());
-    const auto& d = bend->dynamics;
+    REQUIRE(bend->dynamics.has_value());
+    const auto& d = *bend->dynamics;
     REQUIRE(d.amount == 1.0f);
     REQUIRE(d.rows == (1u << kDynamicsRows) - 1u);
     REQUIRE(d.values[0][0] == 1.0f);
