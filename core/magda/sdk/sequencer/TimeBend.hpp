@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <optional>
 #include <span>
 #include <string>
@@ -26,6 +27,10 @@ inline constexpr int kMaxTimeBendPoints = 32;
 /// The crossing grid, per cycle. Fixed from beat 0, so a hit never depends on the block size.
 inline constexpr int kTimeBendSegments = 512;
 inline constexpr int kMaxTimeBendCycles = 8;
+/// Steps of the figure that hold dynamics: a 4-bar span on a sixteenth grid.
+inline constexpr int kMaxDynamicsSteps = 64;
+/// Row 0 is All; rows 1 to 8 are the host's to key, by drum role say.
+inline constexpr int kDynamicsRows = 9;
 
 /** @brief One breakpoint as a shape is written: @c bend in [-1, 1] bows the segment leaving it. */
 struct TimeBendKnot {
@@ -47,6 +52,43 @@ enum class TimeBendShape {
     ThereAndBack
 };
 
+/**
+ * @brief How hard each step of the bend's figure lands (#31): a value per step, never written into
+ * the steps, that a host reads per hit as a modulation source.
+ *
+ * The figure is one pass of the bend on the pattern's grid (figureSteps()), so timing and dynamics
+ * repeat together.
+ */
+struct TimeBendDynamics {
+    bool on = false;
+    /// 0 plays every step neutral, 1 the values.
+    float amount = 1.0f;
+    /// Bit r: row r is drawn. All, row 0, always is.
+    std::uint32_t rows = 1;
+    /// Per row, a value per step of the figure, 0 to 1; 1 is neutral.
+    std::array<std::array<float, kMaxDynamicsSteps>, kDynamicsRows> values = [] {
+        std::array<std::array<float, kMaxDynamicsSteps>, kDynamicsRows> neutral{};
+        for (auto& row : neutral)
+            row.fill(1.0f);
+        return neutral;
+    }();
+
+    /** @brief The row a hit keyed @p row reads: its own when drawn, else All. */
+    int rowFor(int row) const;
+
+    /** @brief A hit's value at @p step of the figure, amount applied; 1 when off or with no step.
+     */
+    float level(int row, int step) const;
+
+    /** @brief Whether any hit reads other than neutral. */
+    bool isActive() const;
+
+    /** @brief Clamps every field; All is always drawn, and a row not drawn is neutral. */
+    void sanitise();
+
+    bool operator==(const TimeBendDynamics&) const = default;
+};
+
 /** @brief A time bend: the curve, how much of it is heard, and the span it repeats over. */
 struct TimeBend {
     bool on = false;
@@ -60,6 +102,8 @@ struct TimeBend {
     std::array<CurvePointData, kMaxTimeBendPoints> points{
         {{.phase = 0.0f, .value = 0.0f}, {.phase = 1.0f, .value = 1.0f}}};
     int count = 2;
+    /// How hard each step lands; a groove may have none.
+    std::optional<TimeBendDynamics> dynamics;
 
     std::span<const CurvePointData> curve() const {
         return {points.data(), static_cast<std::size_t>(std::clamp(count, 0, kMaxTimeBendPoints))};
@@ -77,7 +121,8 @@ struct TimeBend {
     /** @brief Whether the bend changes anything: on, with amount, and a curve off the diagonal. */
     bool isActive() const;
 
-    /** @brief Pins the ends to x = 0 and 1, clamps every field, and reads Step runs as Linear. */
+    /** @brief Pins the ends to x = 0 and 1, clamps every field, the dynamics' too, and reads Step
+     * runs as Linear. */
     void sanitise();
 
     bool operator==(const TimeBend&) const = default;
@@ -101,6 +146,18 @@ TimeBend makeTimeBend(TimeBendShape shape);
 std::optional<TimeBend> grooveTimeBend(std::span<const float> lateness, int notesPerBeat,
                                        double beatsPerBar, float amount = 1.0f);
 
+/**
+ * @brief Steps in one pass of the figure, a cycle of @p cycleBeats on a grid of @p stepBeats: 1 to
+ * kMaxDynamicsSteps, or 0 with no cycle or grid.
+ */
+int figureSteps(double cycleBeats, double stepBeats);
+
+/**
+ * @brief The step of the figure an event at pattern beat @p beat plays: the nearest grid step into
+ * its cycle, the cycle's end wrapping to its start; -1 with no cycle or grid.
+ */
+int figureStep(double beat, double cycleBeats, double stepBeats);
+
 /** @brief The menu label of @p shape. */
 std::string_view timeBendShapeName(TimeBendShape shape);
 
@@ -113,7 +170,8 @@ std::optional<TimeBend> readTimeBend(const StateNode& node);
 /**
  * @brief @p bend as one line of text, for a host whose settings are flat properties.
  *
- * `on|amount|bars|cycles|x,y,type,tension,outX,outY,inX,inY;...`, every number round-tripping.
+ * `on|amount|bars|cycles|x,y,type,tension,outX,outY,inX,inY;...`, every number round-tripping,
+ * then `|on|amount|rows|v,v,...;...` with a value list per drawn row when it has dynamics.
  */
 std::string timeBendToText(const TimeBend& bend);
 
