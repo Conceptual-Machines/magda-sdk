@@ -57,8 +57,11 @@ struct LevelsSnapshot {
     float plr = 0.0f;  ///< peak-to-loudness ratio, LU
     float psr = 0.0f;  ///< peak-to-short-term ratio, LU
 
+    float loudnessRange = 0.0f;  ///< LRA, LU (EBU Tech 3342), since the last reset
+
     bool plrValid = false;
     bool psrValid = false;
+    bool loudnessRangeValid = false;
     bool truePeakValid = false;
 
     /// True once any signal has been processed.

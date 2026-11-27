@@ -3,7 +3,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <initializer_list>
 #include <iterator>
+#include <utility>
 #include <vector>
 
 #include <magda/sdk/analysis/TrackMeasurer.hpp>
@@ -371,4 +373,54 @@ TEST_CASE("TrackMeasurer - capture readings are pinned across the move to the SD
         CHECK(r.bits.size() == std::size(g.bits));
 #endif
     }
+}
+
+namespace {
+
+/** @brief A stereo 1 kHz sine through segments of (dBFS, seconds), as EBU Tech 3342 specifies. */
+float loudnessRangeOf(std::initializer_list<std::pair<double, double>> segments) {
+    TrackMeasurer m;
+    m.prepare(kSr, kBlock, false);
+    double phase = 0.0;
+    for (const auto& [db, seconds] : segments) {
+        const auto amp = static_cast<float>(std::pow(10.0, db / 20.0));
+        feedSine(m, 1000.0, amp, amp, seconds, phase);
+        phase += 2.0 * kPi * 1000.0 * seconds;
+    }
+    const auto s = m.read();
+    REQUIRE(s.loudnessRangeValid);
+    return s.loudnessRange;
+}
+
+}  // namespace
+
+TEST_CASE("TrackMeasurer - loudness range reads the EBU Tech 3342 test signals within 1 LU",
+          "[measurer][lra]") {
+    CHECK(loudnessRangeOf({{-20.0, 20.0}, {-30.0, 20.0}}) == Catch::Approx(10.0f).margin(1.0f));
+    CHECK(loudnessRangeOf({{-20.0, 20.0}, {-15.0, 20.0}}) == Catch::Approx(5.0f).margin(1.0f));
+    CHECK(loudnessRangeOf({{-40.0, 20.0}, {-20.0, 20.0}}) == Catch::Approx(20.0f).margin(1.0f));
+    CHECK(loudnessRangeOf(
+              {{-50.0, 20.0}, {-35.0, 20.0}, {-20.0, 20.0}, {-35.0, 20.0}, {-50.0, 20.0}}) ==
+          Catch::Approx(15.0f).margin(1.0f));
+}
+
+TEST_CASE("TrackMeasurer - a steady tone has no loudness range", "[measurer][lra]") {
+    CHECK(loudnessRangeOf({{-23.0, 10.0}}) == Catch::Approx(0.0f).margin(0.1f));
+}
+
+TEST_CASE("TrackMeasurer - loudness range waits for a full short-term window and resets",
+          "[measurer][lra]") {
+    TrackMeasurer m;
+    m.prepare(kSr, kBlock, false);
+    feedSine(m, 1000.0, 0.1f, 0.1f, 2.5);
+    CHECK_FALSE(m.read().loudnessRangeValid);
+
+    feedSine(m, 1000.0, 0.1f, 0.1f, 1.0);
+    CHECK(m.read().loudnessRangeValid);
+
+    m.reset();
+    CHECK_FALSE(m.read().loudnessRangeValid);
+
+    feedSine(m, 1000.0, 0.0f, 0.0f, 5.0);
+    CHECK_FALSE(m.read().loudnessRangeValid);
 }

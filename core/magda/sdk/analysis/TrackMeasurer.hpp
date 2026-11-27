@@ -15,7 +15,8 @@
 
 /**
  * @file TrackMeasurer.hpp
- * @brief ITU-R BS.1770-4 loudness, sample and true peak, and stereo metrics for one signal point.
+ * @brief ITU-R BS.1770-4 loudness, EBU Tech 3342 loudness range, sample and true peak, and stereo
+ *        metrics for one signal point.
  */
 
 namespace magda::sdk {
@@ -24,12 +25,12 @@ namespace magda::sdk {
 using TrackMeasurementSnapshot = LevelsSnapshot;
 
 /**
- * @brief Momentary, short-term and gated-integrated LUFS, sample and optional 4x true peak,
- *        correlation, width and the PLR/PSR figures derived from them.
+ * @brief Momentary, short-term and gated-integrated LUFS, loudness range, sample and optional 4x
+ *        true peak, correlation, width and the PLR/PSR figures derived from them.
  *
  * Audio thread: @ref process, allocation-free after @ref prepare. Message thread: @ref read,
- * lock-free. The integrated histogram is read with benign races (monotonic counts, so a torn
- * read is a slightly stale value).
+ * lock-free. The integrated and short-term histograms are read with benign races (monotonic
+ * counts, so a torn read is a slightly stale value).
  */
 class TrackMeasurer {
   public:
@@ -64,6 +65,8 @@ class TrackMeasurer {
         curBlockAcc_ = 0.0;
         curBlockN_ = 0;
         for (auto& h : histogram_)
+            h.store(0, std::memory_order_relaxed);
+        for (auto& h : shortTermHistogram_)
             h.store(0, std::memory_order_relaxed);
         corrSmoothed_ = 1.0f;
         widthSmoothed_ = 0.0f;
@@ -171,6 +174,7 @@ class TrackMeasurer {
         s.momentaryLufs = momentary_.load(std::memory_order_relaxed);
         s.shortTermLufs = shortTerm_.load(std::memory_order_relaxed);
         s.integratedLufs = computeIntegrated();
+        s.loudnessRangeValid = computeLoudnessRange(s.loudnessRange);
         s.samplePeakDb = samplePeak_.load(std::memory_order_relaxed);
         s.truePeakValid = enableTruePeak_;
         s.truePeakDb = enableTruePeak_ ? truePeak_.load(std::memory_order_relaxed) : kSilenceDb;
@@ -226,6 +230,21 @@ class TrackMeasurer {
     static constexpr double kHistStep = 0.1;
     std::array<std::atomic<std::uint32_t>, kHistBins> histogram_{};
 
+    // Loudness range: every full 3 s short-term window, 10 per second, in the same bins.
+    std::array<std::atomic<std::uint32_t>, kHistBins> shortTermHistogram_{};
+
+    static void addToHistogram(std::array<std::atomic<std::uint32_t>, kHistBins>& histogram,
+                               double meanSq) noexcept {
+        if (meanSq <= 0.0)
+            return;
+        const double loud = -0.691 + 10.0 * std::log10(meanSq);
+        if (loud < -70.0)
+            return;
+        const int bin = std::clamp(static_cast<int>(std::lround((loud - kHistMin) / kHistStep)), 0,
+                                   kHistBins - 1);
+        histogram[static_cast<std::size_t>(bin)].fetch_add(1, std::memory_order_relaxed);
+    }
+
     void closeGatingBlock() noexcept {
         const double meanSq = curBlockN_ > 0 ? curBlockAcc_ / curBlockN_ : 0.0;
         blockEnergy_[static_cast<std::size_t>(blockCount_ % kRing)] = meanSq;
@@ -234,35 +253,79 @@ class TrackMeasurer {
         curBlockN_ = 0;
 
         // Integrated: a 400 ms gating block is the last four 100 ms blocks, gated at -70 LUFS.
-        if (blockCount_ >= 4) {
-            double e = 0.0;
-            for (int k = 0; k < 4; ++k)
-                e += blockEnergy_[static_cast<std::size_t>((blockCount_ - 1 - k) % kRing)];
-            const double meanSq4 = e / 4.0;
-            if (meanSq4 > 0.0) {
-                const double loud = -0.691 + 10.0 * std::log10(meanSq4);
-                if (loud >= -70.0) {
-                    int bin = static_cast<int>(std::lround((loud - kHistMin) / kHistStep));
-                    bin = std::clamp(bin, 0, kHistBins - 1);
-                    histogram_[static_cast<std::size_t>(bin)].fetch_add(
-                        1, std::memory_order_relaxed);
-                }
-            }
-        }
+        if (blockCount_ >= 4)
+            addToHistogram(histogram_, windowMeanSquare(4));
+        if (blockCount_ >= kRing)
+            addToHistogram(shortTermHistogram_, windowMeanSquare(kRing));
+    }
+
+    /// Mean square over the last @p nBlocks 100 ms blocks; 0 before any block closed.
+    double windowMeanSquare(int nBlocks) const noexcept {
+        const int n = std::min({nBlocks, blockCount_, kRing});
+        if (n <= 0)
+            return 0.0;
+        double e = 0.0;
+        for (int k = 0; k < n; ++k)
+            e += blockEnergy_[static_cast<std::size_t>((blockCount_ - 1 - k) % kRing)];
+        return e / n;
     }
 
     /// Loudness over the last @p nBlocks 100 ms blocks.
     float windowLufs(int nBlocks) const noexcept {
-        const int n = std::min({nBlocks, blockCount_, kRing});
-        if (n <= 0)
-            return kSilenceLufs;
-        double e = 0.0;
-        for (int k = 0; k < n; ++k)
-            e += blockEnergy_[static_cast<std::size_t>((blockCount_ - 1 - k) % kRing)];
-        const double meanSq = e / n;
+        const double meanSq = windowMeanSquare(nBlocks);
         if (meanSq <= 0.0)
             return kSilenceLufs;
         return static_cast<float>(-0.691 + 10.0 * std::log10(meanSq));
+    }
+
+    /// EBU Tech 3342: the 10th to 95th percentile of short-term loudness, gated -20 LU relative.
+    bool computeLoudnessRange(float& range) const noexcept {
+        std::array<std::uint32_t, kHistBins> counts{};
+        double sumE = 0.0;
+        std::uint64_t total = 0;
+        for (int b = 0; b < kHistBins; ++b) {
+            const std::uint32_t c =
+                shortTermHistogram_[static_cast<std::size_t>(b)].load(std::memory_order_relaxed);
+            counts[static_cast<std::size_t>(b)] = c;
+            if (c == 0)
+                continue;
+            sumE += std::pow(10.0, (kHistMin + b * kHistStep + 0.691) / 10.0) * c;
+            total += c;
+        }
+        range = 0.0f;
+        if (total == 0)
+            return false;
+        const double relGate = -0.691 + 10.0 * std::log10(sumE / static_cast<double>(total)) - 20.0;
+        const int firstBin = std::clamp(
+            static_cast<int>(std::ceil((relGate - kHistMin) / kHistStep)), 0, kHistBins - 1);
+
+        std::uint64_t gated = 0;
+        for (int b = firstBin; b < kHistBins; ++b)
+            gated += counts[static_cast<std::size_t>(b)];
+        if (gated == 0)
+            return false;
+
+        // Ranks as libebur128 takes them, so the two read alike.
+        const auto lowRank =
+            static_cast<std::uint64_t>(static_cast<double>(gated - 1) * 0.10 + 0.5);
+        const auto highRank =
+            static_cast<std::uint64_t>(static_cast<double>(gated - 1) * 0.95 + 0.5);
+        double low = 0.0, high = 0.0;
+        std::uint64_t seen = 0;
+        bool lowFound = false;
+        for (int b = firstBin; b < kHistBins; ++b) {
+            seen += counts[static_cast<std::size_t>(b)];
+            if (!lowFound && seen > lowRank) {
+                low = kHistMin + b * kHistStep;
+                lowFound = true;
+            }
+            if (seen > highRank) {
+                high = kHistMin + b * kHistStep;
+                break;
+            }
+        }
+        range = static_cast<float>(high - low);
+        return true;
     }
 
     /// Gated integrated loudness from the histogram: absolute -70 LUFS, then relative -10 LU.
